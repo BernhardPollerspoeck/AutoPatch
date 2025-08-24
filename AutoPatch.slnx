@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/00_Data/">
+    <File Path="README.md" />
+    <File Path="Roadmap.md" />
+    <File Path="spec.md" />
+  </Folder>
+  <Folder Name="/01_Shared/">
+    <Project Path="src/Autopatch.Core/Autopatch.Core.csproj" Id="41ae5bf7-68e6-4b32-ada5-68f55bfde500" />
+  </Folder>
+  <Folder Name="/02_Server/">
+    <Project Path="src/Autopatch.Server/Autopatch.Server.csproj" Id="bfb019dc-b550-4e91-a8bc-a07b2dfbd8b2" />
+  </Folder>
+  <Folder Name="/03_Client/">
+    <Project Path="src/Autopatch.Client/Autopatch.Client.csproj" Id="417721c1-b1d7-4797-aa4a-f253f6bb3a1f" />
+  </Folder>
+  <Folder Name="/20_UnitTests/">
+    <Project Path="test/Autopatch.Client.Tests/Autopatch.Client.Tests.csproj" Id="12ae9457-f40a-462d-a3b1-2af0ad92d46a" />
+    <Project Path="test/Autopatch.Core.Tests/Autopatch.Core.Tests.csproj" Id="79cedf41-e44b-453f-8627-01e77e02a90a" />
+    <Project Path="test/Autopatch.Server.Tests/Autopatch.Server.Tests.csproj" Id="e3eff348-837c-4490-8687-fd76fbc826f3" />
+  </Folder>
+</Solution>

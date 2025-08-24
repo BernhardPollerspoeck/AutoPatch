@@ -2,7 +2,7 @@
 
 [![NuGet Server](https://img.shields.io/nuget/v/AutoPatch.Server.svg)](https://www.nuget.org/packages/AutoPatch.Server/)
 [![NuGet Client](https://img.shields.io/nuget/v/AutoPatch.Client.svg)](https://www.nuget.org/packages/AutoPatch.Client/)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/yourorg/autopatch/ci.yml?branch=main)](https://github.com/yourorg/autopatch/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/BernhardPollerspoeck/autopatch/nuget.yml?branch=main)](https://github.com/BernhardPollerspoeck/autopatch/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Real-time object synchronization between server and client using SignalR and JsonPatch**
@@ -111,6 +111,25 @@ public class SensorViewModel
 ### That's it! 🎉
 
 Your `Sensors` collection will now automatically stay in sync with the server. No manual update code needed.
+
+## 📦 NuGet Packages
+
+The AutoPatch Framework is available as three separate NuGet packages:
+
+| Package | Description | Target Frameworks |
+|---------|-------------|-------------------|
+| [AutoPatch.Core](https://www.nuget.org/packages/AutoPatch.Core/) | Core models and interfaces shared between client and server | .NET Standard 2.1 |
+| [AutoPatch.Server](https://www.nuget.org/packages/AutoPatch.Server/) | Server-side implementation with SignalR Hub | .NET 9.0 |
+| [AutoPatch.Client](https://www.nuget.org/packages/AutoPatch.Client/) | Client-side implementation with subscription management | .NET 9.0 |
+
+### Versioning Strategy
+
+We follow semantic versioning with a three-part version number:
+
+- **9.0.1** - Initial version for .NET 9
+- **9.0.2** - Bug fixes (third number increments)
+- **9.1.1** - New features (second number increments)
+- **10.0.1** - Major version upgrade (.NET version change)
 
 ## 📖 Documentation
 
@@ -325,16 +344,32 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 4. Push to the branch (`git push origin feature/amazing-feature`)  
 5. Open a Pull Request
 
+### Building Locally
+
+To build the project locally:
+
+```bash
+dotnet restore
+dotnet build
+dotnet test
+```
+
+To create NuGet packages:
+
+```bash
+dotnet pack -c Release
+```
+
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🆘 Support
 
-- 📖 [Documentation](https://github.com/yourorg/autopatch/wiki)
-- 🐛 [Issue Tracker](https://github.com/yourorg/autopatch/issues)
-- 💬 [Discussions](https://github.com/yourorg/autopatch/discussions)
-- 📧 [Email Support](mailto:support@yourorg.com)
+- 📖 [Documentation](https://github.com/BernhardPollerspoeck/AutoPatch/wiki)
+- 🐛 [Issue Tracker](https://github.com/BernhardPollerspoeck/AutoPatch/issues)
+- 💬 [Discussions](https://github.com/BernhardPollerspoeck/AutoPatch/discussions)
+- 📧 [Email Support](mailto:bernhard@pollerspoeck.at)
 
 ## 🌟 Roadmap
 

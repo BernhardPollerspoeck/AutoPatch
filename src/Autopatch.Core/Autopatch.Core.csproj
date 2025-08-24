@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    
+    <!-- Package-specific properties -->
+    <PackageId>AutoPatch.Core</PackageId>
+    <Description>Core components of the AutoPatch Framework enabling automatic real-time synchronization of objects between server and client using JsonPatch.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,127 @@
+name: Build, Test, and Publish NuGet Packages
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to NuGet.org"
+        type: boolean
+        default: false
+      increment_version:
+        description: "Version increment type"
+        type: choice
+        options:
+          - none
+          - patch
+          - minor
+          - major
+        default: "none"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    
+    - name: Setup .NET 9
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '9.0.x'
+    
+    - name: Update version if requested
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.increment_version != 'none'
+      shell: pwsh
+      run: |
+        # Read current version from Directory.Build.props
+        [xml]$buildProps = Get-Content "Directory.Build.props"
+        $currentVersion = $buildProps.Project.PropertyGroup.Version
+        
+        # Parse version components
+        $major, $minor, $patch = $currentVersion.Split('.')
+        
+        # Increment based on selected option
+        switch ("${{ github.event.inputs.increment_version }}") {
+          "major" {
+            $major = [int]$major + 1
+            $minor = 0
+            $patch = 1
+          }
+          "minor" {
+            $minor = [int]$minor + 1
+            $patch = 1
+          }
+          "patch" {
+            $patch = [int]$patch + 1
+          }
+        }
+        
+        # Create new version
+        $newVersion = "$major.$minor.$patch"
+        echo "Updating version from $currentVersion to $newVersion"
+        
+        # Update version in Directory.Build.props
+        $buildProps.Project.PropertyGroup.Version = $newVersion
+        $buildProps.Save((Resolve-Path "Directory.Build.props"))
+        
+        # Set environment variable for later steps
+        echo "PACKAGE_VERSION=$newVersion" >> $GITHUB_ENV
+    
+    - name: Get version from Directory.Build.props
+      if: github.event_name != 'workflow_dispatch' || github.event.inputs.increment_version == 'none'
+      shell: pwsh
+      run: |
+        [xml]$buildProps = Get-Content "Directory.Build.props"
+        $version = $buildProps.Project.PropertyGroup.Version
+        echo "PACKAGE_VERSION=$version" >> $GITHUB_ENV
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+    
+    - name: Test with coverage
+      run: dotnet test --no-build --verbosity normal --configuration Release --collect:"XPlat Code Coverage" --settings coverlet.runsettings
+    
+    - name: Generate code coverage report
+      uses: danielpalme/ReportGenerator-GitHub-Action@5.2.0
+      with:
+        reports: '**/coverage.cobertura.xml'
+        targetdir: 'coveragereport'
+        reporttypes: 'HtmlInline_AzurePipelines;Cobertura;Badges'
+    
+    - name: Upload coverage report artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: CoverageReport
+        path: coveragereport
+    
+    - name: Create NuGet packages
+      run: dotnet pack --no-build --configuration Release --output packages
+    
+    - name: Upload NuGet packages artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: NuGetPackages
+        path: packages/*.nupkg
+    
+    - name: Publish NuGet packages
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish == true && github.ref == 'refs/heads/main'
+      run: dotnet nuget push "packages/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+    
+    - name: Tag version in repository
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish == true && github.ref == 'refs/heads/main'
+      run: |
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
+        git tag -a v${{ env.PACKAGE_VERSION }} -m "Release v${{ env.PACKAGE_VERSION }}"
+        git push origin v${{ env.PACKAGE_VERSION }}

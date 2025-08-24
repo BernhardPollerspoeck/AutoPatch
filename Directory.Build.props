@@ -1,0 +1,36 @@
+<Project>
+  <PropertyGroup>
+    <!-- Common Build Properties -->
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+    <NoWarn>$(NoWarn);1591</NoWarn> <!-- Suppress XML documentation warnings -->
+    
+    <!-- Package Properties that are common -->
+    <Authors>Bernhard Pollerspöck</Authors>
+    <Company>Quality Software Pollerspöck</Company>
+    <Copyright>Copyright © Bernhard Pollerspöck, Quality Software Pollerspöck $([System.DateTime]::Now.Year)</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/BernhardPollerspoeck/AutoPatch</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/BernhardPollerspoeck/AutoPatch</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Version>9.0.1</Version>
+    <PackageTags>autopatch;synchronization;signalr;jsonpatch;real-time</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    
+    <!-- Source Link Support -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    
+    <!-- Make assembly deterministic when building in CI -->
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+  
+  <!-- SourceLink -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
+  </ItemGroup>
+</Project>
