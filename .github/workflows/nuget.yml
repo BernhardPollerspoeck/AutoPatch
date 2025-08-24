@@ -83,42 +83,64 @@ jobs:
       run: dotnet restore
     
     - name: Build
-      run: dotnet build --no-restore --configuration Release
+      run: dotnet build --configuration Debug  # Use Debug for better coverage information
     
-    - name: Test with coverage
+    - name: Install coverage tools
       run: |
-        echo "Running tests with coverage collection"
-        # Test each test project individually to ensure coverage files are generated
-        dotnet test test/Autopatch.Core.Tests/Autopatch.Core.Tests.csproj -c Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
-        dotnet test test/Autopatch.Server.Tests/Autopatch.Server.Tests.csproj -c Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
-        dotnet test test/Autopatch.Client.Tests/Autopatch.Client.Tests.csproj -c Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
-      continue-on-error: true  # Don't fail if tests don't exist yet
+        dotnet tool install --global coverlet.console
+        dotnet tool install --global dotnet-reportgenerator-globaltool
+    
+    - name: Create coverage directory
+      run: mkdir -p coverage
+    
+    - name: Run tests with coverage
+      run: |
+        echo "Running tests with coverage collection..."
+        
+        # Core Tests
+        coverlet ./test/Autopatch.Core.Tests/bin/Debug/net9.0/Autopatch.Core.Tests.dll \
+          --target "dotnet" \
+          --targetargs "test ./test/Autopatch.Core.Tests/Autopatch.Core.Tests.csproj --no-build" \
+          --format "cobertura" \
+          --output "./coverage/Autopatch.Core.Tests.coverage.cobertura.xml"
+        
+        # Server Tests
+        coverlet ./test/Autopatch.Server.Tests/bin/Debug/net9.0/Autopatch.Server.Tests.dll \
+          --target "dotnet" \
+          --targetargs "test ./test/Autopatch.Server.Tests/Autopatch.Server.Tests.csproj --no-build" \
+          --format "cobertura" \
+          --output "./coverage/Autopatch.Server.Tests.coverage.cobertura.xml"
+        
+        # Client Tests
+        coverlet ./test/Autopatch.Client.Tests/bin/Debug/net9.0/Autopatch.Client.Tests.dll \
+          --target "dotnet" \
+          --targetargs "test ./test/Autopatch.Client.Tests/Autopatch.Client.Tests.csproj --no-build" \
+          --format "cobertura" \
+          --output "./coverage/Autopatch.Client.Tests.coverage.cobertura.xml"
+      continue-on-error: true
     
     - name: Find coverage files
       run: |
         echo "Looking for coverage files..."
-        find . -name "coverage.cobertura.xml" || echo "No coverage files found with exact name"
-        find . -name "*.cobertura.xml" || echo "No cobertura files found"
-        # More detailed search
-        find ./test -type f -name "*.xml" || echo "No XML files found in test directories"
+        find ./coverage -type f || echo "No coverage files found in coverage directory"
     
     - name: Generate code coverage report
-      uses: danielpalme/ReportGenerator-GitHub-Action@5.2.0
-      with:
-        reports: '**/coverage.cobertura.xml;**/*.cobertura.xml;**/TestResults/**/*.xml'
-        targetdir: 'coveragereport'
-        reporttypes: 'HtmlInline_AzurePipelines;Cobertura;Badges'
-      continue-on-error: true  # Don't fail the workflow if code coverage generation fails
+      run: |
+        reportgenerator \
+          -reports:"./coverage/*.xml" \
+          -targetdir:"./coveragereport" \
+          -reporttypes:"HtmlInline_AzurePipelines;Cobertura;Badges"
+      continue-on-error: true
     
     - name: Upload coverage report artifact
       uses: actions/upload-artifact@v4
       with:
         name: CoverageReport
         path: coveragereport
-      continue-on-error: true  # Don't fail if no coverage report was generated
+      continue-on-error: true
     
     - name: Create NuGet packages
-      run: dotnet pack --no-build --configuration Release --output packages
+      run: dotnet pack --configuration Release --output packages
     
     - name: Upload NuGet packages artifact
       uses: actions/upload-artifact@v4
