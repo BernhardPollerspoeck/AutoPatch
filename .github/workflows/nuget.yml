@@ -129,12 +129,32 @@ jobs:
         name: NuGetPackages
         path: packages/*.nupkg
     
+    - name: Debug publishing conditions
+      run: |
+        echo "Event name: ${{ github.event_name }}"
+        echo "Publish input: ${{ github.event.inputs.publish }}"
+        echo "Branch ref: ${{ github.ref }}"
+        echo "Should publish: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' && github.ref == 'refs/heads/main' }}"
+        
+        # List the packages that would be published
+        echo "Packages to publish:"
+        ls -la packages/*.nupkg
+        
+        # Check if NUGET_API_KEY is set (don't print the actual value)
+        if [ -n "${{ secrets.NUGET_API_KEY }}" ]; then
+          echo "NUGET_API_KEY is set"
+        else
+          echo "NUGET_API_KEY is NOT set"
+        fi
+    
     - name: Publish NuGet packages
-      if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish == true && github.ref == 'refs/heads/main'
-      run: dotnet nuget push "packages/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' && github.ref == 'refs/heads/main'
+      run: |
+        echo "Publishing packages to NuGet.org..."
+        dotnet nuget push "packages/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
     
     - name: Tag version in repository
-      if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish == true && github.ref == 'refs/heads/main'
+      if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' && github.ref == 'refs/heads/main'
       run: |
         git config --global user.name 'GitHub Actions'
         git config --global user.email 'actions@github.com'
