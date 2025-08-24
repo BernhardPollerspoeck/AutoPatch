@@ -28,12 +28,12 @@ jobs:
     
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
     
     - name: Setup .NET 9
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '9.0.x'
     
@@ -100,7 +100,7 @@ jobs:
         reporttypes: 'HtmlInline_AzurePipelines;Cobertura;Badges'
     
     - name: Upload coverage report artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: CoverageReport
         path: coveragereport
@@ -109,7 +109,7 @@ jobs:
       run: dotnet pack --no-build --configuration Release --output packages
     
     - name: Upload NuGet packages artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: NuGetPackages
         path: packages/*.nupkg
