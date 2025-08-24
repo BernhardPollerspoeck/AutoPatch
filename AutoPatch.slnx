@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/00_Data/">
+    <File Path="Directory.Build.props" />
     <File Path="README.md" />
     <File Path="Roadmap.md" />
     <File Path="spec.md" />

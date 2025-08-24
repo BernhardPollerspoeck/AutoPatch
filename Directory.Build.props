@@ -8,14 +8,14 @@
     <NoWarn>$(NoWarn);1591</NoWarn> <!-- Suppress XML documentation warnings -->
     
     <!-- Package Properties that are common -->
-    <Authors>Bernhard Pollerspöck</Authors>
-    <Company>Quality Software Pollerspöck</Company>
-    <Copyright>Copyright © Bernhard Pollerspöck, Quality Software Pollerspöck $([System.DateTime]::Now.Year)</Copyright>
+    <Authors>Bernhard PollerspÃ¶ck</Authors>
+    <Company>Quality Software PollerspÃ¶ck</Company>
+    <Copyright>Copyright Â© Bernhard PollerspÃ¶ck, Quality Software PollerspÃ¶ck $([System.DateTime]::Now.Year)</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/BernhardPollerspoeck/AutoPatch</PackageProjectUrl>
     <RepositoryUrl>https://github.com/BernhardPollerspoeck/AutoPatch</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Version>9.0.1</Version>
+    <Version>9.0.2</Version>
     <PackageTags>autopatch;synchronization;signalr;jsonpatch;real-time</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     
