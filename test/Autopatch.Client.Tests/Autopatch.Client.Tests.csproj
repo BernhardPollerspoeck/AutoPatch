@@ -10,6 +10,10 @@
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
     <IsPackable>false</IsPackable>
     <TestingPlatformShowTestsFailure>true</TestingPlatformShowTestsFailure>
+    <!-- Coverlet settings -->
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>$(MSBuildProjectDirectory)/coverage/</CoverletOutput>
   </PropertyGroup>
 
   <ItemGroup>

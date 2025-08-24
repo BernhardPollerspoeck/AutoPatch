@@ -7,10 +7,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
     inputs:
-      publish:
-        description: "Publish to NuGet.org"
-        type: boolean
-        default: false
       increment_version:
         description: "Version increment type"
         type: choice
@@ -90,31 +86,26 @@ jobs:
       run: dotnet build --no-restore --configuration Release
     
     - name: Test with coverage
-      run: dotnet test --no-build --verbosity normal --configuration Release --collect:"XPlat Code Coverage" --settings coverlet.runsettings
+      run: |
+        echo "Running tests with coverage collection"
+        dotnet test --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=./coverage/
       continue-on-error: true  # Don't fail if tests don't exist yet
     
-    - name: Check for coverage files
-      id: check_coverage
+    - name: Find coverage files
       run: |
-        if compgen -G "**/coverage.cobertura.xml" > /dev/null; then
-          echo "COVERAGE_EXISTS=true" >> $GITHUB_ENV
-          echo "Coverage files found"
-        else
-          echo "COVERAGE_EXISTS=false" >> $GITHUB_ENV
-          echo "No coverage files found"
-        fi
-      shell: bash
+        echo "Looking for coverage files..."
+        find . -name "coverage.cobertura.xml" || echo "No coverage files found with exact name"
+        find . -name "*.cobertura.xml" || echo "No cobertura files found"
+        find . -path "*/coverage/*" -type f || echo "No files in coverage directories"
     
     - name: Generate code coverage report
-      if: env.COVERAGE_EXISTS == 'true'
       uses: danielpalme/ReportGenerator-GitHub-Action@5.2.0
       with:
-        reports: '**/coverage.cobertura.xml'
+        reports: '**/coverage.cobertura.xml;**/coverage/*.cobertura.xml'
         targetdir: 'coveragereport'
         reporttypes: 'HtmlInline_AzurePipelines;Cobertura;Badges'
     
     - name: Upload coverage report artifact
-      if: env.COVERAGE_EXISTS == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: CoverageReport
@@ -129,12 +120,10 @@ jobs:
         name: NuGetPackages
         path: packages/*.nupkg
     
-    - name: Debug publishing conditions
+    - name: Debug publishing information
       run: |
         echo "Event name: ${{ github.event_name }}"
-        echo "Publish input: ${{ github.event.inputs.publish }}"
         echo "Branch ref: ${{ github.ref }}"
-        echo "Should publish: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' && github.ref == 'refs/heads/main' }}"
         
         # List the packages that would be published
         echo "Packages to publish:"
@@ -148,13 +137,11 @@ jobs:
         fi
     
     - name: Publish NuGet packages
-      if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' && github.ref == 'refs/heads/main'
       run: |
         echo "Publishing packages to NuGet.org..."
         dotnet nuget push "packages/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
     
     - name: Tag version in repository
-      if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true' && github.ref == 'refs/heads/main'
       run: |
         git config --global user.name 'GitHub Actions'
         git config --global user.email 'actions@github.com'
