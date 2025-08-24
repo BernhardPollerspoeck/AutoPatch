@@ -1,4 +1,5 @@
 using Autopatch.Demo.Server;
+using Autopatch.Demo.Shared;
 using Autopatch.Server;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +23,7 @@ builder.Services.AddHostedService<DemoDataSimulator>();
 
 var app = builder.Build();
 
+app.UseAutoPatch();
 
 
 app.Run();

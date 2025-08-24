@@ -1,7 +1,13 @@
 ﻿using System.Linq.Expressions;
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using Autopatch.Core;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace Autopatch.Server;
 
@@ -13,30 +19,30 @@ public class AutopatchOptions
 
 public static class IServiceCollectionExtensions
 {
-    public static IServiceCollection AddAutoPatch(this IServiceCollection services, Action<AutopatchOptions>? configure = null)
+    public static IServiceCollection AddAutoPatch(this IServiceCollection services, Action<AutopatchOptions> configure)
     {
-        var options = new AutopatchOptions();
-        configure?.Invoke(options);
-        // Register services here
+        services.Configure(configure);
+
+        services.AddSingleton<IAutoPatchService, AutoPatchService>();
         return services;
     }
 
     public static IServiceCollection AddObjectType<T>(this IServiceCollection services, Action<ObjectTypeConfiguration<T>> configure)
         where T : class
     {
-        var config = new ObjectTypeConfiguration<T>();
-        configure(config);
+        services.Configure(configure);
+
         // Register configuration here
         return services;
     }
 
-    public static IServiceCollection AddChangeHandler<TObject, TChangeHandler>(this IServiceCollection services)
-        where TObject : class
-        where TChangeHandler : class, IChangeHandler<TObject>
-    {
-        services.AddTransient<IChangeHandler<TObject>, TChangeHandler>();
-        return services;
-    }
+    //public static IServiceCollection AddChangeHandler<TObject, TChangeHandler>(this IServiceCollection services)
+    //    where TObject : class
+    //    where TChangeHandler : class, IChangeHandler<TObject>
+    //{
+    //    services.AddSingleton<IChangeHandler<TObject>, TChangeHandler>();
+    //    return services;
+    //}
 }
 
 public static class ISignalRServerBuilderExtensions
@@ -52,51 +58,96 @@ public static class ISignalRServerBuilderExtensions
 
 }
 
-public class AutoPatchHub(IAutoPatchService autoPatchService) : Hub<IAutoPatchHubClient>
+public static class IWebApplicationExetensions
 {
-    public async Task SubscribeToType<T>()
-        where T : class
+    public static WebApplication UseAutoPatch(this WebApplication host)
     {
-        // Create a group name based on the type name
-        var groupName = $"type_{typeof(T).Name}";
-
-        // Add the calling client to the group
-        await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
-
-        var fullData = autoPatchService.GetAllData<T>();
-        await Clients.Caller.ReceiveFullData(fullData);
-    }
-    public async Task UnsubscribeFromType(string typeName)
-    {
-        // Create a group name based on the type name
-        var groupName = $"type_{typeName}";
-
-        // Remove the calling client from the group
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
+        host.MapHub<AutoPatchHub>("/Autopatch");
+        return host;
     }
 
 }
-public interface IAutoPatchHubClient
+public class AutoPatchHub(IAutoPatchService autoPatchService) : Hub
 {
-    Task ReceiveFullData<T>(IEnumerable<T> allData) where T : class;
-    Task ReceiveChanges<T>(IEnumerable<T> changes) where T : class;
+
+
+    public Task<string> SubscribeToType(string typeName)
+    {
+        var groupName = autoPatchService.SubscribeToType(typeName);
+        return Task.FromResult(groupName);
+    }
+
+
 }
 
 public interface IAutoPatchService
 {
-    void NotifyChanged<T>(T changedObject) where T : class;
-    void NotifyChangedBatch<T>(IEnumerable<T> changedObjects) where T : class;
-    IEnumerable<T> GetAllData<T>() where T : class;
+    string SubscribeToType(string typeName);
+    Task HandleChangeAsync<T>(ObjectChange<T> objectChange) where T : class;
+    Task HandleBulkChangeAsync<T>(IEnumerable<ObjectChange<T>> objectChanges) where T : class;
+}
+public class AutoPatchService(
+    IHubContext<AutoPatchHub> hubContext,
+    IServiceProvider serviceProvider)
+    : IAutoPatchService
+{
+    private Dictionary<string, string> _typeSubscriptions = [];
+
+    public string SubscribeToType(string typeName)
+    {
+        if (!_typeSubscriptions.TryGetValue(typeName, out var subscriptionId))
+        {
+            subscriptionId = Guid.NewGuid().ToString();
+            _typeSubscriptions[typeName] = subscriptionId;
+        }
+        return subscriptionId;
+    }
+
+    public async Task HandleBulkChangeAsync<T>(IEnumerable<ObjectChange<T>> objectChanges) where T : class
+    {
+        foreach (var change in objectChanges)
+        {
+            await HandleChangeAsync(change);
+        }
+    }
+
+    public async Task HandleChangeAsync<T>(ObjectChange<T> objectChange) where T : class
+    {
+        var typeName = typeof(T).Name;
+        var subscriptionId = _typeSubscriptions.GetValueOrDefault(typeName);
+        if (subscriptionId is null)
+        {
+            return;
+        }
+
+        var objTypeConfiguration = serviceProvider.GetService<IOptions<ObjectTypeConfiguration<T>>>();
+        if (objTypeConfiguration is null)
+        {
+            throw new InvalidOperationException($"No configuration found for type {typeName}. Please register it using AddObjectType<{typeName}>.");
+        }
+
+        var patchDoc = new JsonPatchDocument();
+        patchDoc.Replace(objectChange.PropertyName, objectChange.NewValue);
+        var patchData = JsonSerializer.Serialize(patchDoc);
+
+        var changeSet = new AutoPatchItem
+        {
+            Action = AutoPatchAction.Update,
+            ItemId = objTypeConfiguration.Value.KeySelector(objectChange.ChangedObject),
+            Data = patchData,
+        };
+
+        await hubContext.Clients.All.SendCoreAsync(subscriptionId, [subscriptionId, changeSet]);
+
+    }
+
 }
 
-public interface IChangeHandler<T>
-{
-    Task HandleChangeAsync(T changedObject);
-}
+public record struct ObjectChange<T>(T ChangedObject, string PropertyName, object? NewValue) where T : class;
 
 public class ObjectTypeConfiguration<T> where T : class
 {
-    public Expression<Func<T, object>> KeySelector { get; set; } = null!;
+    public Func<T, object> KeySelector { get; set; } = null!;
     public string[] ExcludedProperties { get; set; } = [];
     public ClientChangePolicy ClientChangePolicy { get; set; } = ClientChangePolicy.Auto;
     public TimeSpan? ThrottleInterval { get; set; }

@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Autopatch.Server\Autopatch.Server.csproj" />
+    <ProjectReference Include="..\Autopatch.Demo.Shared\Autopatch.Demo.Shared.csproj" />
   </ItemGroup>
 
 </Project>

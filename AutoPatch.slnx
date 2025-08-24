@@ -15,7 +15,9 @@
     <Project Path="src/Autopatch.Client/Autopatch.Client.csproj" Id="417721c1-b1d7-4797-aa4a-f253f6bb3a1f" />
   </Folder>
   <Folder Name="/10_DemoApplication/">
+    <Project Path="demo/Autopatch.Demo.Console/Autopatch.Demo.Console.csproj" />
     <Project Path="demo/Autopatch.Demo.Server/Autopatch.Demo.Server.csproj" Id="3388a6c7-974c-401c-9976-a73d1dac7dcf" />
+    <Project Path="demo/Autopatch.Demo.Shared/Autopatch.Demo.Shared.csproj" Id="a322f8d9-553a-47d7-a8e6-9b24d038bb3f" />
   </Folder>
   <Folder Name="/20_UnitTests/">
     <Project Path="test/Autopatch.Client.Tests/Autopatch.Client.Tests.csproj" Id="12ae9457-f40a-462d-a3b1-2af0ad92d46a" />

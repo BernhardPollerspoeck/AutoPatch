@@ -1,14 +1,9 @@
+using Autopatch.Demo.Shared;
 using Autopatch.Server;
 
 namespace Autopatch.Demo.Server;
 
-public class CarPosition
-{
-    public int Id { get; set; }
-    public string Model { get; set; } = null!;
-    public double Latitude { get; set; }
-    public double Longitude { get; set; }
-}
+
 
 public class DemoDataSimulator : BackgroundService
 {
@@ -36,7 +31,11 @@ public class DemoDataSimulator : BackgroundService
                 // Simulate car movement with small random changes
                 car.Latitude += (_random.NextDouble() - 0.5) * 0.002;
                 car.Longitude += (_random.NextDouble() - 0.5) * 0.002;
-                _autoPatchService.NotifyChanged(car);
+                await _autoPatchService.HandleBulkChangeAsync(
+                    [
+                        new ObjectChange<CarPosition>(car, nameof(CarPosition.Latitude), car.Latitude),
+                        new ObjectChange<CarPosition>(car, nameof(CarPosition.Longitude), car.Longitude)
+                    ]);
             }
         }
     }

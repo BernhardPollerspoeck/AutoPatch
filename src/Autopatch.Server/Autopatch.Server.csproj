@@ -15,10 +15,6 @@
   </ItemGroup>
   
   <ItemGroup>
-    <PackageReference Include="JsonPatch.Net" Version="3.3.0" />
-  </ItemGroup>
-  
-  <ItemGroup>
     <ProjectReference Include="..\Autopatch.Core\Autopatch.Core.csproj" />
   </ItemGroup>
   
