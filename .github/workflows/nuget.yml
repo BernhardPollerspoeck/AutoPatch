@@ -88,7 +88,10 @@ jobs:
     - name: Test with coverage
       run: |
         echo "Running tests with coverage collection"
-        dotnet test --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=./coverage/
+        # Test each test project individually to ensure coverage files are generated
+        dotnet test test/Autopatch.Core.Tests/Autopatch.Core.Tests.csproj -c Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
+        dotnet test test/Autopatch.Server.Tests/Autopatch.Server.Tests.csproj -c Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
+        dotnet test test/Autopatch.Client.Tests/Autopatch.Client.Tests.csproj -c Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
       continue-on-error: true  # Don't fail if tests don't exist yet
     
     - name: Find coverage files
@@ -96,20 +99,23 @@ jobs:
         echo "Looking for coverage files..."
         find . -name "coverage.cobertura.xml" || echo "No coverage files found with exact name"
         find . -name "*.cobertura.xml" || echo "No cobertura files found"
-        find . -path "*/coverage/*" -type f || echo "No files in coverage directories"
+        # More detailed search
+        find ./test -type f -name "*.xml" || echo "No XML files found in test directories"
     
     - name: Generate code coverage report
       uses: danielpalme/ReportGenerator-GitHub-Action@5.2.0
       with:
-        reports: '**/coverage.cobertura.xml;**/coverage/*.cobertura.xml'
+        reports: '**/coverage.cobertura.xml;**/*.cobertura.xml;**/TestResults/**/*.xml'
         targetdir: 'coveragereport'
         reporttypes: 'HtmlInline_AzurePipelines;Cobertura;Badges'
+      continue-on-error: true  # Don't fail the workflow if code coverage generation fails
     
     - name: Upload coverage report artifact
       uses: actions/upload-artifact@v4
       with:
         name: CoverageReport
         path: coveragereport
+      continue-on-error: true  # Don't fail if no coverage report was generated
     
     - name: Create NuGet packages
       run: dotnet pack --no-build --configuration Release --output packages
