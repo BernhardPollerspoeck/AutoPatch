@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Autopatch.Demo.Shared;
 using Autopatch.Server;
 
@@ -7,13 +8,12 @@ namespace Autopatch.Demo.Server;
 
 public class DemoDataSimulator : BackgroundService
 {
-    private readonly IAutoPatchService _autoPatchService;
     private readonly Random _random = new();
-    private readonly List<CarPosition> _cars = [];
+    private readonly ObservableCollection<CarPosition> _cars;
 
-    public DemoDataSimulator(IAutoPatchService autoPatchService)
+    public DemoDataSimulator(ObservableCollection<CarPosition> cars)
     {
-        _autoPatchService = autoPatchService;
+        _cars = cars;
 
         _cars.Add(new CarPosition { Id = 1, Model = "Tesla Model 3", Latitude = 48.2082, Longitude = 16.3738 });
         _cars.Add(new CarPosition { Id = 2, Model = "BMW i4", Latitude = 48.2102, Longitude = 16.3658 });
@@ -31,11 +31,6 @@ public class DemoDataSimulator : BackgroundService
                 // Simulate car movement with small random changes
                 car.Latitude += (_random.NextDouble() - 0.5) * 0.002;
                 car.Longitude += (_random.NextDouble() - 0.5) * 0.002;
-                await _autoPatchService.HandleBulkChangeAsync(
-                    [
-                        new ObjectChange<CarPosition>(car, nameof(CarPosition.Latitude), car.Latitude),
-                        new ObjectChange<CarPosition>(car, nameof(CarPosition.Longitude), car.Longitude)
-                    ]);
             }
         }
     }

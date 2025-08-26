@@ -1,9 +1,18 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace Autopatch.Demo.Shared;
 
-public class CarPosition
+
+public partial class CarPosition : ObservableObject
 {
     public int Id { get; set; }
-    public string Model { get; set; } = null!;
-    public double Latitude { get; set; }
-    public double Longitude { get; set; }
+
+    [ObservableProperty]
+    private string _model = string.Empty;
+
+    [ObservableProperty]
+    private double _latitude;
+
+    [ObservableProperty]
+    private double _longitude;
 }

@@ -1,12 +1,11 @@
-﻿using System.Linq.Expressions;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Text.Json;
-using System.Text.RegularExpressions;
-using Autopatch.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace Autopatch.Server;
@@ -17,78 +16,110 @@ public class AutopatchOptions
     public int MaxBatchSize { get; set; }
 }
 
+public class ObjectTypeConfiguration<T> where T : class
+{
+    public string[] ExcludedProperties { get; set; } = [];
+    public ClientChangePolicy ClientChangePolicy { get; set; } = ClientChangePolicy.Auto;
+    public TimeSpan? ThrottleInterval { get; set; }
+}
 public static class IServiceCollectionExtensions
 {
     public static IServiceCollection AddAutoPatch(this IServiceCollection services, Action<AutopatchOptions> configure)
     {
         services.Configure(configure);
 
-        services.AddSingleton<IAutoPatchService, AutoPatchService>();
+        //services.AddSingleton<IAutoPatchService, AutoPatchService>();
         return services;
     }
 
-    public static IServiceCollection AddObjectType<T>(this IServiceCollection services, Action<ObjectTypeConfiguration<T>> configure)
-        where T : class
+    public static IServiceCollection AddTrackedCollection<TItem>(
+            this IServiceCollection services,
+            Action<ObjectTypeConfiguration<ObservableCollectionTracker<TItem>>>? configure = null)
+            where TItem : class, INotifyPropertyChanged
     {
-        services.Configure(configure);
-
-        // Register configuration here
-        return services;
-    }
-
-    //public static IServiceCollection AddChangeHandler<TObject, TChangeHandler>(this IServiceCollection services)
-    //    where TObject : class
-    //    where TChangeHandler : class, IChangeHandler<TObject>
-    //{
-    //    services.AddSingleton<IChangeHandler<TObject>, TChangeHandler>();
-    //    return services;
-    //}
-}
-
-public static class ISignalRServerBuilderExtensions
-{
-    public static ISignalRServerBuilder AddAutoPatch(this ISignalRServerBuilder builder)
-    {
-        builder.AddHubOptions<AutoPatchHub>(cfg =>
+        if (configure != null)
         {
-        });
-        return builder;
+            services.Configure(configure);
+        }
+
+        services.AddSingleton<ObservableCollectionTracker<TItem>>();
+        services.AddSingleton<IObjectTracker<ObservableCollection<TItem>, TItem>>(sp => sp.GetRequiredService<ObservableCollectionTracker<TItem>>());
+        services.AddSingleton<IObjectTracker>(sp => sp.GetRequiredService<ObservableCollectionTracker<TItem>>());
+        services.AddSingleton(sp => sp.GetRequiredService<IObjectTracker<ObservableCollection<TItem>, TItem>>().TrackedCollection);
+
+        return services;
     }
 
-
 }
+
+public interface IObjectTracker
+{
+    INotifyCollectionChanged TrackedCollection { get; }
+}
+
+public interface IObjectTracker<TCollection, TItem> : IObjectTracker
+    where TCollection : INotifyCollectionChanged, IList<TItem>
+{
+    new TCollection TrackedCollection { get; }
+}
+
+
+public class ObservableCollectionTracker<T> : IObjectTracker<ObservableCollection<T>, T>
+    where T : class, INotifyPropertyChanged
+{
+    public ObservableCollection<T> TrackedCollection { get; } = [];
+
+    INotifyCollectionChanged IObjectTracker.TrackedCollection => TrackedCollection;
+}
+
 
 public static class IWebApplicationExetensions
 {
-    public static WebApplication UseAutoPatch(this WebApplication host)
+    public static HubEndpointConventionBuilder UseAutoPatch(this WebApplication host)
     {
-        host.MapHub<AutoPatchHub>("/Autopatch");
-        return host;
+        return host.MapHub<AutoPatchHub>("/Autopatch");
     }
-
 }
+
+
+
+
 public class AutoPatchHub(IAutoPatchService autoPatchService) : Hub
 {
-
-
     public Task<string> SubscribeToType(string typeName)
     {
         var groupName = autoPatchService.SubscribeToType(typeName);
         return Task.FromResult(groupName);
     }
-
-
+    public Task RequestFullData(string subscriptionId)
+    {
+        autoPatchService.RequestFullData(subscriptionId, Context.ConnectionId);
+        return Task.CompletedTask;
+    }
 }
+
+
+
+//we now need some service that is subscribed to all the collections and tracks changes
+//then it puts all changes into a queue and sends them out in batches based on the throttle interval
+
+
+
+
+
+
+
+
+
+
+
 
 public interface IAutoPatchService
 {
     string SubscribeToType(string typeName);
-    Task HandleChangeAsync<T>(ObjectChange<T> objectChange) where T : class;
-    Task HandleBulkChangeAsync<T>(IEnumerable<ObjectChange<T>> objectChanges) where T : class;
+    void RequestFullData(string subscriptionId, string connectionId);
 }
-public class AutoPatchService(
-    IHubContext<AutoPatchHub> hubContext,
-    IServiceProvider serviceProvider)
+public class AutoPatchService
     : IAutoPatchService
 {
     private Dictionary<string, string> _typeSubscriptions = [];
@@ -102,56 +133,18 @@ public class AutoPatchService(
         }
         return subscriptionId;
     }
-
-    public async Task HandleBulkChangeAsync<T>(IEnumerable<ObjectChange<T>> objectChanges) where T : class
+    public void RequestFullData(string subscriptionId, string connectionId)
     {
-        foreach (var change in objectChanges)
-        {
-            await HandleChangeAsync(change);
-        }
-    }
-
-    public async Task HandleChangeAsync<T>(ObjectChange<T> objectChange) where T : class
-    {
-        var typeName = typeof(T).Name;
-        var subscriptionId = _typeSubscriptions.GetValueOrDefault(typeName);
-        if (subscriptionId is null)
+        if(!_typeSubscriptions.ContainsValue(subscriptionId))
         {
             return;
         }
-
-        var objTypeConfiguration = serviceProvider.GetService<IOptions<ObjectTypeConfiguration<T>>>();
-        if (objTypeConfiguration is null)
-        {
-            throw new InvalidOperationException($"No configuration found for type {typeName}. Please register it using AddObjectType<{typeName}>.");
-        }
-
-        var patchDoc = new JsonPatchDocument();
-        patchDoc.Replace(objectChange.PropertyName, objectChange.NewValue);
-        var patchData = JsonSerializer.Serialize(patchDoc);
-
-        var changeSet = new AutoPatchItem
-        {
-            Action = AutoPatchAction.Update,
-            ItemId = objTypeConfiguration.Value.KeySelector(objectChange.ChangedObject),
-            Data = patchData,
-        };
-
-        await hubContext.Clients.All.SendCoreAsync(subscriptionId, [subscriptionId, changeSet]);
-
+        //here we need to add all objects for the collection on first place in the queue
+        //only send it to the requesting connection
     }
-
+      
 }
 
-public record struct ObjectChange<T>(T ChangedObject, string PropertyName, object? NewValue) where T : class;
-
-public class ObjectTypeConfiguration<T> where T : class
-{
-    public Func<T, object> KeySelector { get; set; } = null!;
-    public string[] ExcludedProperties { get; set; } = [];
-    public ClientChangePolicy ClientChangePolicy { get; set; } = ClientChangePolicy.Auto;
-    public TimeSpan? ThrottleInterval { get; set; }
-}
 
 public enum ClientChangePolicy
 {

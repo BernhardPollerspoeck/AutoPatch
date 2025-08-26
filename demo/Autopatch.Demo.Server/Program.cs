@@ -10,14 +10,12 @@ builder.Services
         cfg.DefaultThrottleInterval = TimeSpan.FromSeconds(1);
         cfg.MaxBatchSize = 100;
     })
-    .AddObjectType<CarPosition>(cfg =>
+    .AddTrackedCollection<CarPosition>(cfg =>
     {
-        cfg.KeySelector = cp => cp.Id;
         cfg.ClientChangePolicy = ClientChangePolicy.Disallow;
     });
 
-builder.Services.AddSignalR()
-    .AddAutoPatch();
+builder.Services.AddSignalR();
 
 builder.Services.AddHostedService<DemoDataSimulator>();
 

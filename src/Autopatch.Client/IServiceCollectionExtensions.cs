@@ -1,5 +1,4 @@
-using System.Text.Json;
-using Autopatch.Core;
+using System.Collections;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,13 +16,6 @@ public static class IServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddObjectType<T>(this IServiceCollection services, Action<ObjectTypeConfiguration<T>> configure)
-        where T : class
-    {
-        services.Configure(configure);
-
-        return services;
-    }
 }
 
 public interface IAutoPatchClient
@@ -31,16 +23,23 @@ public interface IAutoPatchClient
     Task ConnectAsync(CancellationToken cancellationToken = default);
     Task DisconnectAsync(CancellationToken cancellationToken = default);
 
-    Task<string> SubscribeToTypeAsync<T>(IList<T> values, CancellationToken cancellationToken = default) where T : class;
+    Task<string> SubscribeToTypeAsync<T>(IList values, CancellationToken cancellationToken = default) where T : class;
+    Task RequestFullDataAsync(string subscriptionId, CancellationToken cancellationToken = default);
+}
+
+public class AutopatchSubscription
+{
+    public required IList Items { get; init; }
+    //public required Type ItemType { get; init; }
+
 }
 
 public class AutoPatchClient(
-    IOptions<AutoPatchConfiguration> options,
-    IServiceProvider serviceProvider)
+    IOptions<AutoPatchConfiguration> options)
     : IAutoPatchClient
 {
     private HubConnection? _connection;
-    private Dictionary<string, (IList<object>, ObjectTypeConfiguration, Type)> _subscriptions = [];
+    private Dictionary<string, AutopatchSubscription> _subscriptions = [];
 
     public Task ConnectAsync(CancellationToken cancellationToken = default)
     {
@@ -61,78 +60,38 @@ public class AutoPatchClient(
         return _connection.StopAsync(cancellationToken);
     }
 
-    public async Task<string> SubscribeToTypeAsync<T>(IList<T> values, CancellationToken cancellationToken = default)
+    public async Task<string> SubscribeToTypeAsync<T>(IList values, CancellationToken cancellationToken = default)
         where T : class
     {
         if (_connection == null)
             throw new InvalidOperationException("Not connected.");
         var subscriptionId = await _connection.InvokeAsync<string>("SubscribeToType", typeof(T).Name, cancellationToken);
 
-        _connection.On<string, AutoPatchItem>(subscriptionId, HandleAutoPatchItem);
-        _subscriptions[subscriptionId] = (values.Cast<object>().ToList(), serviceProvider.GetRequiredService<IOptions<ObjectTypeConfiguration<T>>>().Value!, typeof(T));
+        _connection.On<string, JsonPatchDocument>(subscriptionId, HandleAutoPatchItem);
+        _subscriptions[subscriptionId] = new AutopatchSubscription
+        {
+            Items = values,
+            //ItemType = typeof(T)
+        };
 
         return subscriptionId;
     }
-
-    private void HandleAutoPatchItem(string subscriptionId, AutoPatchItem changeSet)
+    public Task RequestFullDataAsync(string subscriptionId, CancellationToken cancellationToken = default)
     {
-        if (!_subscriptions.TryGetValue(subscriptionId, out var data))
+        if (_connection == null)
+            throw new InvalidOperationException("Not connected.");
+        return _connection.InvokeAsync("RequestFullData", subscriptionId, cancellationToken);
+    }
+
+    private void HandleAutoPatchItem(string subscriptionId, JsonPatchDocument changeSet)
+    {
+        if (!_subscriptions.TryGetValue(subscriptionId, out var subscription))
         {
             return;
         }
 
-        switch (changeSet.Action)
-        {
-            case AutoPatchAction.Add when changeSet.Data is not null:
-                var addData = JsonSerializer.Deserialize<AutoPatchAddDocument>(changeSet.Data);
-                if (addData is null)
-                {
-                    return;
-                }
-                var addItem = JsonSerializer.Deserialize(addData.Json, data.Item3);
-                data.Item1.Insert(addData.Index, addData.Json);
-                break;
-            case AutoPatchAction.Remove:
-                var removeItem = data.Item1.FirstOrDefault(d => data.Item2.KeySelector(d) == changeSet.ItemId);
-                if (removeItem is null)
-                {
-                    return;
-                }
-                data.Item1.Remove(removeItem);
-                break;
-            case AutoPatchAction.Update when changeSet.Data is not null:
-                var updateItem = data.Item1.FirstOrDefault(d => data.Item2.KeySelector(d) == changeSet.ItemId);
-                if (updateItem is null)
-                {
-                    return;
-                }
-                var jsonPatch = JsonSerializer.Deserialize<JsonPatchDocument>(changeSet.Data);
-                if (jsonPatch is null)
-                {
-                    return;
-                }
-                jsonPatch.ApplyTo(updateItem);
-                break;
-            default:
-                //logging
-                break;
-        }
-
-
-
-
-
+        changeSet.ApplyTo(subscription.Items);
     }
-}
-
-public abstract class ObjectTypeConfiguration
-{
-    public Func<object, object> KeySelector { get; set; } = null!;
-    public ChangeTrackingMode ChangeTracking { get; set; } = ChangeTrackingMode.Auto;
-}
-public class ObjectTypeConfiguration<T> : ObjectTypeConfiguration where T : class
-{
-    public new Func<T, object> KeySelector { get; set; } = null!;
 }
 
 public class AutoPatchConfiguration

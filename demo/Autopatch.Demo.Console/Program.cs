@@ -12,10 +12,8 @@ builder.Services
     {
         cfg.Endpoint = "http://localhost:5249";
     })
-    .AddObjectType<CarPosition>(cfg =>
-    {
-        cfg.KeySelector = cp => cp.Id;
-    });
+
+    ;
 
 var app = builder.Build();
 
@@ -27,7 +25,8 @@ await autoPatchClient.ConnectAsync();
 
 var cars = new ObservableCollection<CarPosition>();
 
-var subscriptionId = await autoPatchClient.SubscribeToTypeAsync(cars);
+var subscriptionId = await autoPatchClient.SubscribeToTypeAsync<CarPosition>(cars);
+await autoPatchClient.RequestFullDataAsync(subscriptionId);
 
 while (true)
 {
