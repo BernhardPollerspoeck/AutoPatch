@@ -2,10 +2,9 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Text.Json;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.JsonPatch;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Autopatch.Server;
@@ -28,7 +27,8 @@ public static class IServiceCollectionExtensions
     {
         services.Configure(configure);
 
-        //services.AddSingleton<IAutoPatchService, AutoPatchService>();
+        services.AddHostedService<AutoPatchCollectionTrackerService>();
+
         return services;
     }
 
@@ -47,6 +47,7 @@ public static class IServiceCollectionExtensions
         services.AddSingleton<IObjectTracker>(sp => sp.GetRequiredService<ObservableCollectionTracker<TItem>>());
         services.AddSingleton(sp => sp.GetRequiredService<IObjectTracker<ObservableCollection<TItem>, TItem>>().TrackedCollection);
 
+
         return services;
     }
 
@@ -55,6 +56,9 @@ public static class IServiceCollectionExtensions
 public interface IObjectTracker
 {
     INotifyCollectionChanged TrackedCollection { get; }
+
+    void StartTracking();
+    void StopTracking();
 }
 
 public interface IObjectTracker<TCollection, TItem> : IObjectTracker
@@ -70,57 +74,46 @@ public class ObservableCollectionTracker<T> : IObjectTracker<ObservableCollectio
     public ObservableCollection<T> TrackedCollection { get; } = [];
 
     INotifyCollectionChanged IObjectTracker.TrackedCollection => TrackedCollection;
-}
 
-
-public static class IWebApplicationExetensions
-{
-    public static HubEndpointConventionBuilder UseAutoPatch(this WebApplication host)
+    public void StartTracking()
     {
-        return host.MapHub<AutoPatchHub>("/Autopatch");
+        TrackedCollection.CollectionChanged += HandleCollectionChange;
     }
-}
-
-
-
-
-public class AutoPatchHub(IAutoPatchService autoPatchService) : Hub
-{
-    public Task<string> SubscribeToType(string typeName)
+    public void StopTracking()
     {
-        var groupName = autoPatchService.SubscribeToType(typeName);
-        return Task.FromResult(groupName);
+        TrackedCollection.CollectionChanged -= HandleCollectionChange;
     }
-    public Task RequestFullData(string subscriptionId)
+
+    private void HandleCollectionChange(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        autoPatchService.RequestFullData(subscriptionId, Context.ConnectionId);
-        return Task.CompletedTask;
+        if (e.NewItems != null)
+        {
+            foreach (T item in e.NewItems)
+            {
+                //TODO: notify add
+                item.PropertyChanged += HandleItemPropertyChanged;
+            }
+        }
+        if (e.OldItems != null)
+        {
+            foreach (T item in e.OldItems)
+            {
+                //TODO: notify remove
+                item.PropertyChanged -= HandleItemPropertyChanged;
+            }
+        }
     }
+    private void HandleItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        //TODO: notify change
+    }
+
+    //maybe some queue or bucket that triggers on some debounce and max size
+
 }
 
 
-
-//we now need some service that is subscribed to all the collections and tracks changes
-//then it puts all changes into a queue and sends them out in batches based on the throttle interval
-
-
-
-
-
-
-
-
-
-
-
-
-public interface IAutoPatchService
-{
-    string SubscribeToType(string typeName);
-    void RequestFullData(string subscriptionId, string connectionId);
-}
-public class AutoPatchService
-    : IAutoPatchService
+internal class AutoPatchService : IAutoPatchService
 {
     private Dictionary<string, string> _typeSubscriptions = [];
 
@@ -133,23 +126,24 @@ public class AutoPatchService
         }
         return subscriptionId;
     }
+    public string Unsubscribe(string subscriptionId)
+    {
+        var item = _typeSubscriptions.FirstOrDefault(kv => kv.Value == subscriptionId);
+        if (item.Key != null)
+        {
+            _typeSubscriptions.Remove(item.Key);
+        }
+        return item.Key ?? "";
+    }
     public void RequestFullData(string subscriptionId, string connectionId)
     {
-        if(!_typeSubscriptions.ContainsValue(subscriptionId))
+        if (!_typeSubscriptions.ContainsValue(subscriptionId))
         {
             return;
         }
         //here we need to add all objects for the collection on first place in the queue
         //only send it to the requesting connection
     }
-      
-}
 
-
-public enum ClientChangePolicy
-{
-    Auto,
-    Allow,
-    Disallow
 }
 
