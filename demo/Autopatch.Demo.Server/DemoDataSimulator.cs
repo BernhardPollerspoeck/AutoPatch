@@ -15,16 +15,19 @@ public class DemoDataSimulator : BackgroundService
     {
         _cars = cars;
 
-        _cars.Add(new CarPosition { Id = 1, Model = "Tesla Model 3", Latitude = 48.2082, Longitude = 16.3738 });
-        _cars.Add(new CarPosition { Id = 2, Model = "BMW i4", Latitude = 48.2102, Longitude = 16.3658 });
-        _cars.Add(new CarPosition { Id = 3, Model = "Audi e-tron", Latitude = 48.2132, Longitude = 16.3718 });
+
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _cars.Add(new CarPosition { Id = 1, Model = "Tesla Model 3", Latitude = 48.2082, Longitude = 16.3738 });
+        _cars.Add(new CarPosition { Id = 2, Model = "BMW i4", Latitude = 48.2102, Longitude = 16.3658 });
+        _cars.Add(new CarPosition { Id = 3, Model = "Audi e-tron", Latitude = 48.2132, Longitude = 16.3718 });
+
+        _cars.Remove(_cars.Last());
         while (!stoppingToken.IsCancellationRequested)
         {
-            await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(200), stoppingToken);
 
             foreach (var car in _cars)
             {

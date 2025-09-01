@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -9,10 +10,10 @@ namespace Autopatch.Server;
 /// <remarks>This service is designed to start and stop a set of <see cref="IObjectTracker"/> instances,  which
 /// are responsible for tracking changes in their respective collections. The service  integrates with the application's
 /// hosting environment and is started and stopped automatically  as part of the application's lifecycle.</remarks>
-/// <param name="objectTrackers"></param>
+/// <param name="serviceProvider"></param>
 /// <param name="logger"></param>
 internal class AutoPatchCollectionTrackerService(
-    IObjectTracker[] objectTrackers,
+    IServiceProvider serviceProvider,
     ILogger<AutoPatchCollectionTrackerService> logger)
     : IHostedService
 {
@@ -26,6 +27,8 @@ internal class AutoPatchCollectionTrackerService(
     /// <returns>A completed <see cref="Task"/> representing the asynchronous operation.</returns>
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        using var scope = serviceProvider.CreateScope();
+        var objectTrackers = scope.ServiceProvider.GetServices<IObjectTracker>().ToArray();
         logger.LogInformation("Starting AutoPatchCollectionTrackerService with {Count} trackers", objectTrackers.Length);
         foreach (var tracker in objectTrackers)
         {
@@ -43,6 +46,8 @@ internal class AutoPatchCollectionTrackerService(
     /// <returns>A completed <see cref="Task"/> representing the asynchronous operation.</returns>
     public Task StopAsync(CancellationToken cancellationToken)
     {
+        using var scope = serviceProvider.CreateScope();
+        var objectTrackers = scope.ServiceProvider.GetServices<IObjectTracker>().ToArray();
         logger.LogInformation("Stopping AutoPatchCollectionTrackerService with {Count} trackers", objectTrackers.Length);
         foreach (var tracker in objectTrackers)
         {

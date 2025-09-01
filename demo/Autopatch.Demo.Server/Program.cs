@@ -12,7 +12,7 @@ builder.Services
     })
     .AddTrackedCollection<CarPosition>(cfg =>
     {
-        cfg.ClientChangePolicy = ClientChangePolicy.Disallow;
+        cfg.ClientChangePolicy = ClientChangePolicy.Reject;
     });
 
 builder.Services.AddSignalR();

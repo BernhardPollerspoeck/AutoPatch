@@ -10,7 +10,7 @@ namespace Autopatch.Server;
 /// Clients can use this hub to subscribe to specific data types, unsubscribe from existing subscriptions, and request
 /// full data updates for a given subscription.</remarks>
 /// <param name="autoPatchService"></param>
-internal class AutoPatchHub(IAutoPatchService autoPatchService) : Hub
+public class AutoPatchHub(IAutoPatchService autoPatchService) : Hub
 {
     /// <summary>
     /// Subscribes to a specific type and returns the associated group name.

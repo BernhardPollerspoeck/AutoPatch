@@ -1,18 +1,5 @@
 namespace Autopatch.Server;
 
-//we now need some service that is subscribed to all the collections and tracks changes
-//then it puts all changes into a queue and sends them out in batches based on the throttle interval
-
-
-
-
-
-
-
-
-
-
-
 /// <summary>
 /// Provides functionality to manage subscriptions, track changes, and handle data synchronization  for specified types
 /// in a distributed system.
