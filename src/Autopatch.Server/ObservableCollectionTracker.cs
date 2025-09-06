@@ -2,14 +2,14 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Reflection;
-using Microsoft.AspNetCore.JsonPatch;
+using Autopatch.Core;
 using Microsoft.AspNetCore.JsonPatch.Operations;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Autopatch.Server;
 
 public class ObservableCollectionTracker<T>(
-    BulkFlushQueue<Operation<ObservableCollection<T>>> queue,
+    BulkFlushQueue<OperationContainer<T>> queue,
     IHubContext<AutoPatchHub> hubContext)
     : IObjectTracker<ObservableCollection<T>, T>
     where T : class, INotifyPropertyChanged
@@ -20,6 +20,8 @@ public class ObservableCollectionTracker<T>(
     private const string PATH_ADD = "/-";
 
     private readonly Dictionary<string, PropertyInfo> _propertyCache = [];
+
+    public string TypeName => typeof(T).Name;
 
     public ObservableCollection<T> TrackedCollection { get; } = [];
 
@@ -36,6 +38,19 @@ public class ObservableCollectionTracker<T>(
         queue.OnFlush -= HandleQueueFlush;
     }
 
+    public void SendFullData(string connectionId)
+    {
+        var operation = new FullDataOperationContainer<T>(
+            TrackedCollection.Select(item => new Operation<ObservableCollection<T>>
+            {
+                op = ADD,
+                path = PATH_ADD,
+                value = item,
+            }).ToArray(),
+            connectionId);
+        queue.Add(operation);
+    }
+
     private void HandleCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.NewItems != null)
@@ -50,7 +65,7 @@ public class ObservableCollectionTracker<T>(
                     path = PATH_ADD,
                     value = item,
                 };
-                queue.Add(operation);
+                queue.Add(new DefaultOperationContainer<T>(operation));
             }
         }
         if (e.OldItems != null)
@@ -64,7 +79,7 @@ public class ObservableCollectionTracker<T>(
                     op = REMOVE,
                     path = $"/{e.OldStartingIndex}",
                 };
-                queue.Add(operation);
+                queue.Add(new DefaultOperationContainer<T>(operation));
             }
         }
     }
@@ -91,19 +106,29 @@ public class ObservableCollectionTracker<T>(
             path = $"/{TrackedCollection.IndexOf(item)}/{e.PropertyName}",
             value = propInfo.GetValue(item)//TODO: we currently cant get the value without reflection here. Maybe later SourceGenerator can help?
         };
-        queue.Add(operation);
+        queue.Add(new DefaultOperationContainer<T>(operation));
     }
 
-    private Task HandleQueueFlush(List<Operation<ObservableCollection<T>>> operations)
+    private async Task HandleQueueFlush(List<OperationContainer<T>> containers)
     {
-        var document = new JsonPatchDocument<ObservableCollection<T>>();
-        foreach (var op in operations)
+        var target = $"AutoPatch/{typeof(T).Name}";
+        foreach (var container in containers)
         {
-            document.Operations.Add(op);
+            if (container is FullDataOperationContainer<T> fullData)
+            {
+                await hubContext.Clients
+                    .Client(fullData.ConnectionId)
+                    .SendAsync(target, fullData.Operation);
+            }
         }
 
-        var key = $"AutoPatch/{typeof(T).Name}";//TODO: key builder
-        return hubContext.Clients.Groups(key).SendAsync(key, document);
+        var operations = containers
+            .Where(c => c is DefaultOperationContainer<T>)
+            .Select(c => (DefaultOperationContainer<T>)c);
+        await hubContext.Clients
+            .All
+            //.Groups(target)
+            .SendAsync(target, operations);
     }
 }
 

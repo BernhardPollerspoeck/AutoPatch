@@ -20,7 +20,7 @@ public class BulkFlushQueue<TQueueItem>(
 
     public event Func<List<TQueueItem>, Task>? OnFlush;
 
-    public void Add(TQueueItem item)
+    public void Add(TQueueItem item, int? index = null, bool forceFlush = false)
     {
         lock (_lock)
         {
@@ -30,7 +30,20 @@ public class BulkFlushQueue<TQueueItem>(
                 (int)options.Value.DefaultThrottleInterval.TotalMilliseconds,
                 (int)options.Value.DefaultThrottleInterval.TotalMilliseconds);
 
-            _queue.Add(item);
+            if (index.HasValue)
+            {
+                _queue.Insert(index.Value, item);
+            }
+            else
+            {
+                _queue.Add(item);
+            }
+            if (forceFlush)
+            {
+                InternalFlush(FlushMode.Manual);
+                return;
+            }
+
             if (_queue.Count >= options.Value.MaxBatchSize)
             {
                 InternalFlush(FlushMode.MaxBatchSize);

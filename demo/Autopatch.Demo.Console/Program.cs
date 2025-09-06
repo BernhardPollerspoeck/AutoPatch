@@ -12,31 +12,35 @@ builder.Services
     {
         cfg.Endpoint = "http://localhost:5249";
     })
-
+    .AddTrackedCollection<CarPosition>()
     ;
 
 var app = builder.Build();
 
-app.Start();
+
+await app.StartAsync();
+
+
 
 var autoPatchClient = app.Services.GetRequiredService<IAutoPatchClient>();
+await autoPatchClient.SubscribeToTypeAsync<CarPosition>();
 
-await autoPatchClient.ConnectAsync();
 
-var cars = new ObservableCollection<CarPosition>();
 
-var subscriptionId = await autoPatchClient.SubscribeToTypeAsync<CarPosition>(cars);
-await autoPatchClient.RequestFullDataAsync(subscriptionId);
+
+var collection = autoPatchClient.GetTrackedCollection<CarPosition>();
 
 while (true)
 {
     Console.Clear();
-    Console.WriteLine($"Subscription ID: {subscriptionId}");
     Console.WriteLine("Cars:");
-    foreach (var car in cars)
+    foreach (var car in collection)
     {
         Console.WriteLine($"- {car.Id}: {car.Model} at ({car.Latitude}, {car.Longitude})");
     }
     Console.WriteLine("Press Ctrl+C to exit.");
     await Task.Delay(2000);
 }
+
+
+//await autoPatchClient.UnsubscribeFromTypeAsync<CarPosition>();

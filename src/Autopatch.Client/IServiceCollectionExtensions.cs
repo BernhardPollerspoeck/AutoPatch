@@ -1,5 +1,7 @@
 using System.Collections;
+using System.Collections.ObjectModel;
 using Microsoft.AspNetCore.JsonPatch;
+using Microsoft.AspNetCore.JsonPatch.Operations;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -12,10 +14,18 @@ public static class IServiceCollectionExtensions
         services.Configure(configure);
 
         services.AddSingleton<IAutoPatchClient, AutoPatchClient>();
+        services.AddHostedService<AutopatchConnectionManager>();
 
         return services;
     }
 
+    public static IServiceCollection AddTrackedCollection<TItem>(this IServiceCollection services)
+    {
+        services.AddSingleton<ObservableCollection<TItem>>();
+
+
+        return services;
+    }
 }
 
 public interface IAutoPatchClient
@@ -23,23 +33,20 @@ public interface IAutoPatchClient
     Task ConnectAsync(CancellationToken cancellationToken = default);
     Task DisconnectAsync(CancellationToken cancellationToken = default);
 
-    Task<string> SubscribeToTypeAsync<T>(IList values, CancellationToken cancellationToken = default) where T : class;
-    Task RequestFullDataAsync(string subscriptionId, CancellationToken cancellationToken = default);
+    Task SubscribeToTypeAsync<T>(CancellationToken cancellationToken = default) where T : class;
+    Task UnsubscribeFromTypeAsync<T>(CancellationToken cancellationToken = default) where T : class;
+
+    ObservableCollection<T> GetTrackedCollection<T>() where T : class;
 }
 
-public class AutopatchSubscription
-{
-    public required IList Items { get; init; }
-    //public required Type ItemType { get; init; }
-
-}
 
 public class AutoPatchClient(
-    IOptions<AutoPatchConfiguration> options)
+    IOptions<AutoPatchConfiguration> options,
+    IServiceProvider serviceProvider)
     : IAutoPatchClient
 {
     private HubConnection? _connection;
-    private Dictionary<string, AutopatchSubscription> _subscriptions = [];
+    private readonly Dictionary<string, Subscription> _subscriptions = [];
 
     public Task ConnectAsync(CancellationToken cancellationToken = default)
     {
@@ -47,9 +54,6 @@ public class AutoPatchClient(
             .WithUrl($"{options.Value.Endpoint}/Autopatch");
 
         _connection = builder.Build();
-
-
-
         return _connection.StartAsync(cancellationToken);
 
     }
@@ -60,38 +64,64 @@ public class AutoPatchClient(
         return _connection.StopAsync(cancellationToken);
     }
 
-    public async Task<string> SubscribeToTypeAsync<T>(IList values, CancellationToken cancellationToken = default)
+
+    public async Task SubscribeToTypeAsync<T>(CancellationToken cancellationToken = default)
         where T : class
     {
         if (_connection == null)
             throw new InvalidOperationException("Not connected.");
-        var subscriptionId = await _connection.InvokeAsync<string>("SubscribeToType", typeof(T).Name, cancellationToken);
 
-        _connection.On<string, JsonPatchDocument>(subscriptionId, HandleAutoPatchItem);
-        _subscriptions[subscriptionId] = new AutopatchSubscription
+        var methodName = $"AutoPatch/{typeof(T).Name}";
+
+        var collection = serviceProvider.GetRequiredService<ObservableCollection<T>>();
+        if (!_subscriptions.TryAdd(methodName, new Subscription(collection))
+            && _subscriptions.TryGetValue(methodName, out var subscription))
         {
-            Items = values,
-            //ItemType = typeof(T)
-        };
-
-        return subscriptionId;
-    }
-    public Task RequestFullDataAsync(string subscriptionId, CancellationToken cancellationToken = default)
-    {
-        if (_connection == null)
-            throw new InvalidOperationException("Not connected.");
-        return _connection.InvokeAsync("RequestFullData", subscriptionId, cancellationToken);
-    }
-
-    private void HandleAutoPatchItem(string subscriptionId, JsonPatchDocument changeSet)
-    {
-        if (!_subscriptions.TryGetValue(subscriptionId, out var subscription))
-        {
-            return;
+            subscription.Subscribers++;
         }
 
-        changeSet.ApplyTo(subscription.Items);
+        _connection.On<Operation[]>(methodName, HandleAutoPatchItem);
+
+        await _connection.InvokeAsync("SubscribeToType", typeof(T).Name, cancellationToken);
     }
+    public Task UnsubscribeFromTypeAsync<T>(CancellationToken cancellationToken = default)
+        where T : class
+    {
+        if (_subscriptions.TryGetValue($"AutoPatch/{typeof(T).Name}", out var subscription))
+        {
+            subscription.Subscribers--;
+            if (subscription.Subscribers == 0)
+                _subscriptions.Remove($"AutoPatch/{typeof(T).Name}");
+        }
+
+
+        if (_connection == null)
+            throw new InvalidOperationException("Not connected.");
+
+        _connection.Remove($"AutoPatch/{typeof(T).Name}");
+        return _connection.InvokeAsync("UnsubscribeFromType", typeof(T).Name, cancellationToken);
+    }
+
+    public ObservableCollection<T> GetTrackedCollection<T>()
+        where T : class
+    {
+        if (!_subscriptions.TryGetValue($"AutoPatch/{typeof(T).Name}", out var subscription))
+            throw new InvalidOperationException($"Type {typeof(T).Name} is not subscribed.");
+
+        return (ObservableCollection<T>)subscription.TrackedCollection;
+    }
+
+
+    private void HandleAutoPatchItem(Operation[] changeSet)
+    {
+        // TODO: Apply patches to the tracked collection
+    }
+}
+
+internal class Subscription(object collection)
+{
+    public object TrackedCollection { get; } = collection;
+    public int Subscribers { get; set; } = 1;
 }
 
 public class AutoPatchConfiguration

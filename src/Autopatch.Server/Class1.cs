@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Text.Json;
+using Autopatch.Core;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.JsonPatch.Operations;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,51 +36,9 @@ public static class IServiceCollectionExtensions
         services.AddSingleton<IObjectTracker<ObservableCollection<TItem>, TItem>>(sp => sp.GetRequiredService<ObservableCollectionTracker<TItem>>());
         services.AddSingleton<IObjectTracker>(sp => sp.GetRequiredService<ObservableCollectionTracker<TItem>>());
         services.AddSingleton(sp => sp.GetRequiredService<IObjectTracker<ObservableCollection<TItem>, TItem>>().TrackedCollection);
-        services.AddSingleton<BulkFlushQueue<Operation<ObservableCollection<TItem>>>>();
+        services.AddSingleton<BulkFlushQueue<OperationContainer<TItem>>>();
 
         return services;
     }
 
 }
-
-//connection flow idea:
-//- if a client subscribes 
-//- the client gets all data he also gets a timestamp
-//- while the client does not have all the data, all incoming changes are queued
-//- once the client has all data, the queued changes are processed in order if the timestamp is newer than the initial data timestamp
-
-
-internal class AutoPatchService : IAutoPatchService
-{
-    private Dictionary<string, string> _typeSubscriptions = [];
-
-    public string SubscribeToType(string typeName)
-    {
-        if (!_typeSubscriptions.TryGetValue(typeName, out var subscriptionId))
-        {
-            subscriptionId = Guid.NewGuid().ToString();
-            _typeSubscriptions[typeName] = subscriptionId;
-        }
-        return subscriptionId;
-    }
-    public string Unsubscribe(string subscriptionId)
-    {
-        var item = _typeSubscriptions.FirstOrDefault(kv => kv.Value == subscriptionId);
-        if (item.Key != null)
-        {
-            _typeSubscriptions.Remove(item.Key);
-        }
-        return item.Key ?? "";
-    }
-    public void RequestFullData(string subscriptionId, string connectionId)
-    {
-        if (!_typeSubscriptions.ContainsValue(subscriptionId))
-        {
-            return;
-        }
-        //here we need to add all objects for the collection on first place in the queue
-        //only send it to the requesting connection
-    }
-
-}
-

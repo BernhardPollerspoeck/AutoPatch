@@ -4,10 +4,13 @@ namespace Autopatch.Server;
 
 public interface IObjectTracker
 {
+    string TypeName { get; }
     INotifyCollectionChanged TrackedCollection { get; }
 
     void StartTracking();
     void StopTracking();
+
+    void SendFullData(string connectionId);
 }
 
 public interface IObjectTracker<TCollection, TItem> : IObjectTracker
