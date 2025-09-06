@@ -1,6 +1,7 @@
+using Autopatch.Server.SignalR;
 using Microsoft.AspNetCore.Builder;
 
-namespace Autopatch.Server;
+namespace Autopatch.Server.Extensions;
 
 /// <summary>
 /// Adds the AutoPatch SignalR hub to the specified <see cref="WebApplication"/> instance.

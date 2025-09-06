@@ -1,4 +1,4 @@
-namespace Autopatch.Server;
+namespace Autopatch.Server.Models;
 
 /// <summary>
 /// Specifies the policy for handling client changes in a system.

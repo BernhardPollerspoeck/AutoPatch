@@ -2,7 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Autopatch.Server;
+namespace Autopatch.Server.Services;
 
 /// <summary>
 /// Provides a hosted service that manages the lifecycle of object trackers for collections.

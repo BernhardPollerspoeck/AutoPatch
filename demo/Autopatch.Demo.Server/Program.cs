@@ -1,6 +1,7 @@
 using Autopatch.Demo.Server;
 using Autopatch.Demo.Shared;
-using Autopatch.Server;
+using Autopatch.Server.Extensions;
+using Autopatch.Server.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -1,4 +1,4 @@
-namespace Autopatch.Server;
+namespace Autopatch.Server.Models;
 
 public class ObjectTypeConfiguration<T> where T : class
 {

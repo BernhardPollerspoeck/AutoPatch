@@ -1,6 +1,7 @@
 
 using System.Collections.ObjectModel;
-using Autopatch.Client;
+using Autopatch.Client.Extensions;
+using Autopatch.Client.Services;
 using Autopatch.Demo.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
