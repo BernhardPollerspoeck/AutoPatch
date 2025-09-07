@@ -137,19 +137,33 @@ public class AutoPatchClient(
             return; //Ignore until initial set is done
         }
 
-        var contractResolver = new DefaultContractResolver();
-        var adapter = new ObjectAdapter(contractResolver, null, new AdapterFactory());
-
-        foreach (var operation in changeSet)
+        // Apply operations, optionally using dispatcher for UI thread marshalling
+        void ApplyOperations()
         {
-            if (operation.value is JsonElement jsonElement)
+            var contractResolver = new DefaultContractResolver();
+            var adapter = new ObjectAdapter(contractResolver, null, new AdapterFactory());
+
+            foreach (var operation in changeSet)
             {
-                operation.value = ConvertJsonElementToTargetType(jsonElement, operation, subscription);
+                if (operation.value is JsonElement jsonElement)
+                {
+                    operation.value = ConvertJsonElementToTargetType(jsonElement, operation, subscription);
+                }
+                operation.Apply(subscription.TrackedCollection, adapter);
             }
-            operation.Apply(subscription.TrackedCollection, adapter);
+
+            subscription.IsInitialized = true;
         }
 
-        subscription.IsInitialized = true;
+        // Use dispatcher if configured (for WPF/UI scenarios)
+        if (options.Value.Dispatcher != null)
+        {
+            options.Value.Dispatcher(ApplyOperations);
+        }
+        else
+        {
+            ApplyOperations();
+        }
     }
 
     /// <summary>

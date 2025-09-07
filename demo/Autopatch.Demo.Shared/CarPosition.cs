@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Autopatch.Demo.Shared;
 
-
 public partial class CarPosition : ObservableObject
 {
     public int Id { get; set; }

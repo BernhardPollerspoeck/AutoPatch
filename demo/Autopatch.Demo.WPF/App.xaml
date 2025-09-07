@@ -1,0 +1,50 @@
+<Application x:Class="Autopatch.Demo.WPF.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:Autopatch.Demo.WPF.Converters">
+    <Application.Resources>
+        
+        <!-- Converters -->
+        <converters:OrderStatusToColorConverter x:Key="OrderStatusToColorConverter"/>
+        <converters:DriverStatusToColorConverter x:Key="DriverStatusToColorConverter"/>
+        <converters:ItemsListConverter x:Key="ItemsListConverter"/>
+        <converters:ETAToColorConverter x:Key="ETAToColorConverter"/>
+        
+        <!-- Color Brushes for Driver Status -->
+        <SolidColorBrush x:Key="DriverAvailableBrush" Color="LimeGreen"/>
+        <SolidColorBrush x:Key="DriverAssignedBrush" Color="Orange"/>
+        <SolidColorBrush x:Key="DriverDeliveringBrush" Color="Red"/>
+        <SolidColorBrush x:Key="DriverReturningBrush" Color="DodgerBlue"/>
+        <SolidColorBrush x:Key="DriverOfflineBrush" Color="Gray"/>
+        
+        <!-- Color Brushes for Order Status -->
+        <SolidColorBrush x:Key="OrderReceivedBrush" Color="LightBlue"/>
+        <SolidColorBrush x:Key="OrderPreparingBrush" Color="Yellow"/>
+        <SolidColorBrush x:Key="OrderBakingBrush" Color="Orange"/>
+        <SolidColorBrush x:Key="OrderReadyBrush" Color="LimeGreen"/>
+        <SolidColorBrush x:Key="OrderOutForDeliveryBrush" Color="Red"/>
+        
+        <!-- Default Styles -->
+        <Style TargetType="DataGrid">
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="CanUserDeleteRows" Value="False"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="AlternatingRowBackground" Value="LightGray"/>
+        </Style>
+        
+        <Style TargetType="TextBlock" x:Key="HeaderStyle">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        
+        <Style TargetType="TextBlock" x:Key="StatTextStyle">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="5"/>
+        </Style>
+        
+    </Application.Resources>
+</Application>
