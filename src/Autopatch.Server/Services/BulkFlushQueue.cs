@@ -13,11 +13,12 @@ namespace Autopatch.Server.Services;
 /// <param name="logger">Logger instance for recording queue operations and errors.</param>
 public class BulkFlushQueue<TQueueItem>(
     IOptions<AutopatchOptions> options,
-    ILogger<BulkFlushQueue<TQueueItem>> logger)
+    ILogger<BulkFlushQueue<TQueueItem>> logger) : IDisposable
 {
-    private readonly Lock _lock = new();
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
     private readonly List<TQueueItem> _queue = [];
     private Timer? _timer;
+    private bool _disposed = false;
 
     /// <summary>
     /// Event that is raised when the queue is flushed. Subscribers receive the list of items being flushed.
@@ -30,12 +31,16 @@ public class BulkFlushQueue<TQueueItem>(
     /// <param name="item">The item to add to the queue.</param>
     /// <param name="index">Optional zero-based index to insert the item at. If null, item is added to the end.</param>
     /// <param name="forceFlush">If true, immediately flushes the queue after adding the item.</param>
-    public void Add(TQueueItem item, int? index = null, bool forceFlush = false)
+    public async Task Add(TQueueItem item, int? index = null, bool forceFlush = false)
     {
-        lock (_lock)
+        if (_disposed)
+            return;
+
+        await _semaphore.WaitAsync();
+        try
         {
             _timer ??= new(
-                TimerCallback,
+                async _ => await TimerCallback(),
                 null,
                 (int)options.Value.DefaultThrottleInterval.TotalMilliseconds,
                 (int)options.Value.DefaultThrottleInterval.TotalMilliseconds);
@@ -48,27 +53,40 @@ public class BulkFlushQueue<TQueueItem>(
             {
                 _queue.Add(item);
             }
+            
             if (forceFlush)
             {
-                InternalFlush(FlushMode.Manual);
+                await InternalFlush(FlushMode.Manual);
                 return;
             }
 
             if (_queue.Count >= options.Value.MaxBatchSize)
             {
-                InternalFlush(FlushMode.MaxBatchSize);
+                await InternalFlush(FlushMode.MaxBatchSize);
             }
+        }
+        finally
+        {
+            _semaphore.Release();
         }
     }
 
     /// <summary>
     /// Manually flushes all items currently in the queue.
     /// </summary>
-    public void Flush()
+    public async Task Flush()
     {
-        lock (_lock)
+        if (_disposed)
+            return;
+
+        await _semaphore.WaitAsync();
+        try
         {
-            InternalFlush(FlushMode.Manual);
+            await InternalFlush(FlushMode.Manual);
+        }
+        finally
+        {
+            _semaphore.Release();
         }
     }
 
@@ -77,34 +95,61 @@ public class BulkFlushQueue<TQueueItem>(
     /// and clearing the queue. Resets the timer interval after flushing.
     /// </summary>
     /// <param name="flushMode">The mode that triggered this flush operation.</param>
-    private void InternalFlush(FlushMode flushMode)
+    private async Task InternalFlush(FlushMode flushMode)
     {
+        if (_queue.Count == 0)
+            return;
+
         logger.LogInformation("Flushing BulkFlushQueue with {Count} items (Mode: {Mode})", _queue.Count, flushMode);
         var itemsToFlush = _queue.ToList();
+        
         try
         {
-            OnFlush?.Invoke(itemsToFlush);
+            if (OnFlush != null)
+                await OnFlush.Invoke(itemsToFlush);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error during flush of BulkFlushQueue");
         }
+        
         _queue.Clear();
 
         _timer?.Change(
-                (int)options.Value.DefaultThrottleInterval.TotalMilliseconds,
-                (int)options.Value.DefaultThrottleInterval.TotalMilliseconds);
+            (int)options.Value.DefaultThrottleInterval.TotalMilliseconds,
+            (int)options.Value.DefaultThrottleInterval.TotalMilliseconds);
     }
 
     /// <summary>
     /// Timer callback method that triggers a timed flush when the throttle interval elapses.
     /// </summary>
-    /// <param name="state">Timer state parameter (unused).</param>
-    private void TimerCallback(object? state)
+    private async Task TimerCallback()
     {
-        lock (_lock)
+        if (_disposed)
+            return;
+
+        await _semaphore.WaitAsync();
+        try
         {
-            InternalFlush(FlushMode.Timed);
+            await InternalFlush(FlushMode.Timed);
         }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// Releases all resources used by the BulkFlushQueue.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        _timer?.Dispose();
+        _timer = null;
+        _semaphore.Dispose();
     }
 }

@@ -23,7 +23,7 @@ namespace Autopatch.Server.Services;
 public class ObservableCollectionTracker<T>(
     BulkFlushQueue<OperationContainer<T>> queue,
     IHubContext<AutoPatchHub> hubContext)
-    : IObjectTracker<ObservableCollection<T>, T>
+    : IObjectTracker<ObservableCollection<T>, T>, IDisposable
     where T : class, INotifyPropertyChanged
 {
     /// <summary>
@@ -87,11 +87,18 @@ public class ObservableCollectionTracker<T>(
     /// </summary>
     /// <remarks>
     /// This method unsubscribes from all events to disable synchronization and prevent memory leaks.
+    /// It also cleans up all PropertyChanged event subscriptions from items in the collection.
     /// </remarks>
     public void StopTracking()
     {
         TrackedCollection.CollectionChanged -= HandleCollectionChanged;
         queue.OnFlush -= HandleQueueFlush;
+        
+        // Clean up PropertyChanged events from all items to prevent memory leaks
+        foreach (T item in TrackedCollection)
+        {
+            item.PropertyChanged -= HandleItemPropertyChanged;
+        }
     }
 
     /// <summary>
@@ -112,7 +119,8 @@ public class ObservableCollectionTracker<T>(
                 value = item,
             })],
             connectionId);
-        queue.Add(operation);
+        
+        _ = Task.Run(async () => await queue.Add(operation));
     }
 
     /// <summary>
@@ -138,7 +146,8 @@ public class ObservableCollectionTracker<T>(
                     path = PATH_ADD,
                     value = item,
                 };
-                queue.Add(new DefaultOperationContainer<T>(operation));
+                
+                _ = Task.Run(async () => await queue.Add(new DefaultOperationContainer<T>(operation)));
             }
         }
         if (e.OldItems != null)
@@ -152,7 +161,8 @@ public class ObservableCollectionTracker<T>(
                     op = REMOVE,
                     path = $"/{e.OldStartingIndex}",
                 };
-                queue.Add(new DefaultOperationContainer<T>(operation));
+                
+                _ = Task.Run(async () => await queue.Add(new DefaultOperationContainer<T>(operation)));
             }
         }
     }
@@ -168,28 +178,36 @@ public class ObservableCollectionTracker<T>(
     /// </remarks>
     private void HandleItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is not T item || string.IsNullOrEmpty(e.PropertyName))
+        try
         {
-            return;
-        }
-
-        if (!_propertyCache.TryGetValue(e.PropertyName, out var propInfo))
-        {
-            propInfo = item.GetType().GetProperty(e.PropertyName);
-            if (propInfo == null)
+            if (sender is not T item || string.IsNullOrEmpty(e.PropertyName))
             {
                 return;
             }
-            _propertyCache[e.PropertyName] = propInfo;
-        }
 
-        var operation = new Operation<ObservableCollection<T>>
+            if (!_propertyCache.TryGetValue(e.PropertyName, out var propInfo))
+            {
+                propInfo = item.GetType().GetProperty(e.PropertyName);
+                if (propInfo == null)
+                {
+                    return;
+                }
+                _propertyCache[e.PropertyName] = propInfo;
+            }
+
+            var operation = new Operation<ObservableCollection<T>>
+            {
+                op = REPLACE,
+                path = $"/{TrackedCollection.IndexOf(item)}/{e.PropertyName}",
+                value = propInfo.GetValue(item)//TODO: we currently cant get the value without reflection here. Maybe later SourceGenerator can help?
+            };
+            
+            _ = Task.Run(async () => await queue.Add(new DefaultOperationContainer<T>(operation)));
+        }
+        catch (Exception)
         {
-            op = REPLACE,
-            path = $"/{TrackedCollection.IndexOf(item)}/{e.PropertyName}",
-            value = propInfo.GetValue(item)//TODO: we currently cant get the value without reflection here. Maybe later SourceGenerator can help?
-        };
-        queue.Add(new DefaultOperationContainer<T>(operation));
+            // TODO: Add proper logging here
+        }
     }
 
     /// <summary>
@@ -223,5 +241,18 @@ public class ObservableCollectionTracker<T>(
             .All
             //.Groups(target)
             .SendAsync(target, target, operations, false);
+    }
+
+    /// <summary>
+    /// Releases all resources used by the ObservableCollectionTracker and ensures proper cleanup.
+    /// </summary>
+    /// <remarks>
+    /// This method ensures that all event subscriptions are properly removed and resources are cleaned up
+    /// to prevent memory leaks. It should be called when the tracker is no longer needed.
+    /// </remarks>
+    public void Dispose()
+    {
+        StopTracking();
+        _propertyCache.Clear();
     }
 }

@@ -8,13 +8,14 @@ public class AutopatchOptions
     /// <summary>
     /// Gets or sets the default interval between throttled operations.
     /// </summary>
-    /// <value>The default throttle interval. Defaults to a system-defined value.</value>
-    public TimeSpan DefaultThrottleInterval { get; set; }
+    /// <value>The default throttle interval. Defaults to 200 milliseconds.</value>
+    public TimeSpan DefaultThrottleInterval { get; set; } = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
     /// Gets or sets the maximum number of items that can be processed in a single batch.
     /// </summary>
-    /// <value>The maximum batch size. Must be greater than zero.</value>
-    public int MaxBatchSize { get; set; }
+    /// <value>The maximum batch size. Must be greater than zero. Defaults to 100.</value>
+    public int MaxBatchSize { get; set; } = 100;
 }
+
 
