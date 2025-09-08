@@ -3,9 +3,12 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Reflection;
 using Autopatch.Core;
+using Autopatch.Server.Models;
 using Autopatch.Server.SignalR;
 using Microsoft.AspNetCore.JsonPatch.Operations;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Autopatch.Server.Services;
 
@@ -14,6 +17,7 @@ namespace Autopatch.Server.Services;
 /// </summary>
 /// <typeparam name="T">The type of items in the collection. Must implement <see cref="INotifyPropertyChanged"/>.</typeparam>
 /// <param name="queue">The queue for batching operations before sending to clients.</param>
+/// <param name="options">Options for configuring the object type tracking behavior.</param>
 /// <param name="hubContext">The SignalR hub context for communicating with clients.</param>
 /// <remarks>
 /// This tracker monitors changes to both the collection itself (add/remove operations) and properties 
@@ -22,6 +26,8 @@ namespace Autopatch.Server.Services;
 /// </remarks>
 public class ObservableCollectionTracker<T>(
     BulkFlushQueue<OperationContainer<T>> queue,
+    IOptions<ObjectTypeConfiguration<T>> options,
+    ILogger<ObservableCollectionTracker<T>> logger,
     IHubContext<AutoPatchHub> hubContext)
     : IObjectTracker<ObservableCollection<T>, T>, IDisposable
     where T : class, INotifyPropertyChanged
@@ -93,7 +99,7 @@ public class ObservableCollectionTracker<T>(
     {
         TrackedCollection.CollectionChanged -= HandleCollectionChanged;
         queue.OnFlush -= HandleQueueFlush;
-        
+
         // Clean up PropertyChanged events from all items to prevent memory leaks
         foreach (T item in TrackedCollection)
         {
@@ -119,7 +125,7 @@ public class ObservableCollectionTracker<T>(
                 value = item,
             })],
             connectionId);
-        
+
         _ = Task.Run(async () => await queue.Add(operation));
     }
 
@@ -146,7 +152,7 @@ public class ObservableCollectionTracker<T>(
                     path = PATH_ADD,
                     value = item,
                 };
-                
+
                 _ = Task.Run(async () => await queue.Add(new DefaultOperationContainer<T>(operation)));
             }
         }
@@ -161,7 +167,7 @@ public class ObservableCollectionTracker<T>(
                     op = REMOVE,
                     path = $"/{e.OldStartingIndex}",
                 };
-                
+
                 _ = Task.Run(async () => await queue.Add(new DefaultOperationContainer<T>(operation)));
             }
         }
@@ -185,6 +191,13 @@ public class ObservableCollectionTracker<T>(
                 return;
             }
 
+            if (options.Value.ExcludedProperties is { Length: > 0 }
+                && options.Value.ExcludedProperties.Contains(e.PropertyName))
+            {
+                return;
+            }
+
+
             if (!_propertyCache.TryGetValue(e.PropertyName, out var propInfo))
             {
                 propInfo = item.GetType().GetProperty(e.PropertyName);
@@ -201,12 +214,12 @@ public class ObservableCollectionTracker<T>(
                 path = $"/{TrackedCollection.IndexOf(item)}/{e.PropertyName}",
                 value = propInfo.GetValue(item)//TODO: we currently cant get the value without reflection here. Maybe later SourceGenerator can help?
             };
-            
+
             _ = Task.Run(async () => await queue.Add(new DefaultOperationContainer<T>(operation)));
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // TODO: Add proper logging here
+            logger.LogError(ex, "Error handling property change for {TypeName}.{PropertyName}", typeof(T).Name, e.PropertyName);
         }
     }
 
@@ -238,8 +251,7 @@ public class ObservableCollectionTracker<T>(
             .Select(c => c.Operation)
             .ToArray();
         await hubContext.Clients
-            .All
-            //.Groups(target)
+            .Groups(target)
             .SendAsync(target, target, operations, false);
     }
 

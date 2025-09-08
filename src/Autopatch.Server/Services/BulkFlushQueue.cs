@@ -10,10 +10,13 @@ namespace Autopatch.Server.Services;
 /// </summary>
 /// <typeparam name="TQueueItem">The type of items stored in the queue.</typeparam>
 /// <param name="options">Configuration options for queue behavior including batch size and throttle interval.</param>
+/// <param name="itemOptions">Options specific to the type of items in the queue, such as maximum batch size.</param>
 /// <param name="logger">Logger instance for recording queue operations and errors.</param>
 public class BulkFlushQueue<TQueueItem>(
     IOptions<AutopatchOptions> options,
-    ILogger<BulkFlushQueue<TQueueItem>> logger) : IDisposable
+    IOptions<ObjectTypeConfiguration<TQueueItem>> itemOptions,
+    ILogger<BulkFlushQueue<TQueueItem>> logger)
+    : IDisposable
 {
     private readonly SemaphoreSlim _semaphore = new(1, 1);
     private readonly List<TQueueItem> _queue = [];
@@ -42,8 +45,8 @@ public class BulkFlushQueue<TQueueItem>(
             _timer ??= new(
                 async _ => await TimerCallback(),
                 null,
-                (int)options.Value.DefaultThrottleInterval.TotalMilliseconds,
-                (int)options.Value.DefaultThrottleInterval.TotalMilliseconds);
+                GetThrottleIntervalMilliseconds(),
+                GetThrottleIntervalMilliseconds());
 
             if (index.HasValue)
             {
@@ -53,14 +56,14 @@ public class BulkFlushQueue<TQueueItem>(
             {
                 _queue.Add(item);
             }
-            
+
             if (forceFlush)
             {
                 await InternalFlush(FlushMode.Manual);
                 return;
             }
 
-            if (_queue.Count >= options.Value.MaxBatchSize)
+            if (_queue.Count >= GetMaxBatchSize())
             {
                 await InternalFlush(FlushMode.MaxBatchSize);
             }
@@ -102,7 +105,7 @@ public class BulkFlushQueue<TQueueItem>(
 
         logger.LogInformation("Flushing BulkFlushQueue with {Count} items (Mode: {Mode})", _queue.Count, flushMode);
         var itemsToFlush = _queue.ToList();
-        
+
         try
         {
             if (OnFlush != null)
@@ -112,12 +115,12 @@ public class BulkFlushQueue<TQueueItem>(
         {
             logger.LogError(ex, "Error during flush of BulkFlushQueue");
         }
-        
+
         _queue.Clear();
 
         _timer?.Change(
-            (int)options.Value.DefaultThrottleInterval.TotalMilliseconds,
-            (int)options.Value.DefaultThrottleInterval.TotalMilliseconds);
+            GetThrottleIntervalMilliseconds(),
+            GetThrottleIntervalMilliseconds());
     }
 
     /// <summary>
@@ -152,4 +155,7 @@ public class BulkFlushQueue<TQueueItem>(
         _timer = null;
         _semaphore.Dispose();
     }
+
+    private int GetMaxBatchSize() => itemOptions.Value.MaxBatchSize ?? options.Value.MaxBatchSize;
+    private int GetThrottleIntervalMilliseconds() => (int)(itemOptions.Value.ThrottleInterval?.TotalMilliseconds ?? options.Value.DefaultThrottleInterval.TotalMilliseconds);
 }
