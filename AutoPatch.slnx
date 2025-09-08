@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/00_Data/">
     <File Path=".editorconfig" />
+    <File Path=".github/workflows/nuget.yml" />
     <File Path="Directory.Build.props" />
     <File Path="README.md" />
     <File Path="Roadmap.md" />

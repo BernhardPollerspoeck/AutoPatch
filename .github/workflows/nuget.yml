@@ -81,7 +81,7 @@ jobs:
         Write-Host "Setting package version to: $version"
     
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore -p:EnableWindowsTargeting=true
     
     - name: Build
       run: dotnet build --configuration Debug  # Use Debug for better coverage information
