@@ -167,8 +167,16 @@ jobs:
     
     - name: Publish NuGet packages
       run: |
-        echo "Publishing packages to NuGet.org..."
-        dotnet nuget push "packages/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        echo "Publishing library packages to NuGet.org..."
+        for package in packages/*.nupkg; do
+          package_name=$(basename "$package")
+          if [[ "$package_name" =~ ^AutoPatch\.(Core|Client|Server)\. ]]; then
+            echo "Publishing library package: $package"
+            dotnet nuget push "$package" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+          else
+            echo "Skipping non-library package: $package"
+          fi
+        done
     
     - name: Tag version in repository
       run: |
