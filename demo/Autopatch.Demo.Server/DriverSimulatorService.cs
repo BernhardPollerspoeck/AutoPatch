@@ -181,8 +181,6 @@ public class DriverSimulatorService(
                         currentDriver.X = CustomerX; // Fixed customer position
                         currentDriver.Status = DriverStatus.Returning;
 
-                        //get the order and set it to delivered
-                        var ordersToRemove = new List<PizzaOrder>();
                         lock (CollectionLocks.OrdersLock)
                         {
                             foreach (var orderId in currentDriver.AssignedOrders)
@@ -192,14 +190,7 @@ public class DriverSimulatorService(
                                 {
                                     // Mark order as delivered
                                     order.Status = OrderStatus.Delivered;
-                                    ordersToRemove.Add(order);
                                 }
-                            }
-
-                            // Remove delivered orders from collection
-                            foreach (var order in ordersToRemove)
-                            {
-                                // orders.Remove(order);
                             }
                         }
                     }
