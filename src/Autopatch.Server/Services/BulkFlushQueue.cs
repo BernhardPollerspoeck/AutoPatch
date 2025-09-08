@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Autopatch.Server.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,6 +18,7 @@ public class BulkFlushQueue<TQueueItem>(
     IOptions<ObjectTypeConfiguration<TQueueItem>> itemOptions,
     ILogger<BulkFlushQueue<TQueueItem>> logger)
     : IDisposable
+    where TQueueItem : class
 {
     private readonly SemaphoreSlim _semaphore = new(1, 1);
     private readonly List<TQueueItem> _queue = [];

@@ -50,7 +50,7 @@ public static class IServiceCollectionExtensions
     /// </remarks>
     public static IServiceCollection AddTrackedCollection<TItem>(
             this IServiceCollection services,
-            Action<ObjectTypeConfiguration<ObservableCollectionTracker<TItem>>>? configure = null)
+            Action<ObjectTypeConfiguration<OperationContainer<TItem>>>? configure = null)
             where TItem : class, INotifyPropertyChanged
     {
         if (configure != null)

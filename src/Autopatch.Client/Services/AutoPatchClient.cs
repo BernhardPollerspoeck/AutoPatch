@@ -161,7 +161,7 @@ public class AutoPatchClient(
         {
             var contractResolver = new DefaultContractResolver();
             var adapter = new ObjectAdapter(contractResolver, null, new AdapterFactory());
-
+            //TODO: while we apply, client changes need to be paused in a smart way
             foreach (var operation in changeSet)
             {
                 if (operation.value is JsonElement jsonElement)

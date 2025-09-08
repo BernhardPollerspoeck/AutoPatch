@@ -1,4 +1,5 @@
 using Autopatch.Server.Services;
+using Microsoft.AspNetCore.JsonPatch.Operations;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Autopatch.Server.SignalR;
@@ -44,4 +45,9 @@ public class AutoPatchHub(IEnumerable<IObjectTracker> objectTrackers) : Hub
     {
         return Groups.RemoveFromGroupAsync(Context.ConnectionId, $"AutoPatch/{typeName}");
     }
+
+    //public Task<ClientChangeResult> SubmitClientChange(string typeName, Operation[] operations)
+    //{
+
+    //}
 }

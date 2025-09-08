@@ -18,6 +18,7 @@ namespace Autopatch.Server.Services;
 /// <typeparam name="T">The type of items in the collection. Must implement <see cref="INotifyPropertyChanged"/>.</typeparam>
 /// <param name="queue">The queue for batching operations before sending to clients.</param>
 /// <param name="options">Options for configuring the object type tracking behavior.</param>
+/// <param name="logger">Logger for logging information and errors.</param>
 /// <param name="hubContext">The SignalR hub context for communicating with clients.</param>
 /// <remarks>
 /// This tracker monitors changes to both the collection itself (add/remove operations) and properties 
@@ -26,7 +27,7 @@ namespace Autopatch.Server.Services;
 /// </remarks>
 public class ObservableCollectionTracker<T>(
     BulkFlushQueue<OperationContainer<T>> queue,
-    IOptions<ObjectTypeConfiguration<T>> options,
+    IOptions<ObjectTypeConfiguration<OperationContainer<T>>> options,
     ILogger<ObservableCollectionTracker<T>> logger,
     IHubContext<AutoPatchHub> hubContext)
     : IObjectTracker<ObservableCollection<T>, T>, IDisposable

@@ -15,10 +15,13 @@ builder.Services
     .AddTrackedCollection<PizzaOrder>(cfg =>
     {
         cfg.ClientChangePolicy = ClientChangePolicy.Reject; // Read-only for demo
+        cfg.ThrottleInterval = TimeSpan.FromMilliseconds(300);
+        cfg.ExcludedProperties = [nameof(PizzaOrder.EstimatedDelivery)];
     })
     .AddTrackedCollection<DeliveryDriver>(cfg =>
     {
         cfg.ClientChangePolicy = ClientChangePolicy.Reject; // Read-only for demo
+        cfg.ThrottleInterval = TimeSpan.FromMilliseconds(400);
     });
 
 builder.Services.AddSignalR();
