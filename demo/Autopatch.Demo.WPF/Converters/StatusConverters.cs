@@ -17,7 +17,7 @@ public class OrderStatusToColorConverter : IValueConverter
             return status switch
             {
                 OrderStatus.Received => Colors.LightBlue,
-                OrderStatus.Preparing => Colors.Yellow,
+                OrderStatus.Preparing => Colors.SlateBlue,
                 OrderStatus.Baking => Colors.Orange,
                 OrderStatus.Ready => Colors.LimeGreen,
                 OrderStatus.OutForDelivery => Colors.Red,

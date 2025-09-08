@@ -113,8 +113,9 @@ public partial class DeliveryDriver : ObservableObject
     private double _y = 300; // Default: Middle lane
 
     /// <summary>
-    /// Movement speed in pixels per update (1-4, represents delivery distance)
+    /// Movement speed in pixels per second (80-150, represents delivery distance)
     /// Higher speed = closer customer, lower speed = farther customer
+    /// Used for time-based movement calculations independent of frame rate
     /// </summary>
     [ObservableProperty]
     private int _deliverySpeed = 2;

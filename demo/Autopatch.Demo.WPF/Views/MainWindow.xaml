@@ -3,7 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:Autopatch.Demo.WPF.Views"
         Title="🍕 Poller's Pizza Palace - AutoPatch Demo" 
-        Height="800" Width="1200"
+        Height="630"
+        Width="1500"
+        ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen">
     
     <Grid>
@@ -33,7 +35,6 @@
             
             <Grid.RowDefinitions>
                 <RowDefinition Height="2*"/> <!-- Orders & Map -->
-                <RowDefinition Height="1*"/> <!-- Statistics -->
             </Grid.RowDefinitions>
             
             <!-- Orders List -->
@@ -47,13 +48,7 @@
                     Margin="5,0,0,5" Padding="10">
                 <views:DriversMapView DataContext="{Binding DriversViewModel}"/>
             </Border>
-            
-            <!-- Statistics -->
-            <Border Grid.Column="0" Grid.Row="1" Grid.ColumnSpan="2" BorderBrush="Gray" 
-                    BorderThickness="1" Margin="0,5,0,0" Padding="10">
-                <views:StatisticsView DataContext="{Binding StatisticsViewModel}"/>
-            </Border>
-            
+                        
         </Grid>
         
         <!-- Status Bar -->

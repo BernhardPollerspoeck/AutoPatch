@@ -27,77 +27,20 @@ public class DeliveryCompletionService : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             // Check for deliveries every 200ms for faster demo and smooth response
-            await Task.Delay(TimeSpan.FromMilliseconds(200), stoppingToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(25), stoppingToken);
 
-            CompleteDeliveries();
             CleanupOldOrders();
         }
     }
 
-    private void CompleteDeliveries()
-    {
-        List<DeliveryDriver> driversSnapshot;
-        
-        // Create thread-safe snapshot of drivers using shared lock
-        lock (CollectionLocks.DriversLock)
-        {
-            driversSnapshot = _drivers
-                .Where(d => d.Status == DriverStatus.Delivering && d.X >= 540) // Match updated delivery position
-                .ToList();
-        }
 
-        // Process each driver that has reached customers
-        foreach (var driver in driversSnapshot)
-        {
-            CompleteDriverDeliveries(driver);
-        }
-    }
 
-    private void CompleteDriverDeliveries(DeliveryDriver driver)
-    {
-        List<string> assignedOrderIds;
-        
-        // Get assigned orders for this driver using shared lock
-        lock (CollectionLocks.DriversLock)
-        {
-            var currentDriver = _drivers.FirstOrDefault(d => d.DriverId == driver.DriverId);
-            if (currentDriver == null || currentDriver.Status != DriverStatus.Delivering || currentDriver.X < 540) // Match updated position
-            {
-                return; // Driver state changed or not at delivery location
-            }
-            
-            assignedOrderIds = currentDriver.AssignedOrders.ToList();
-        }
 
-        // Complete orders assigned to this driver using shared lock
-        var ordersToRemove = new List<PizzaOrder>();
-        
-        lock (CollectionLocks.OrdersLock)
-        {
-            foreach (var orderId in assignedOrderIds)
-            {
-                var order = _orders.FirstOrDefault(o => o.OrderId == orderId);
-                if (order != null)
-                {
-                    // Mark order as delivered
-                    order.Status = OrderStatus.Delivered;
-                    ordersToRemove.Add(order);
-                    Console.WriteLine($"✅ Order {order.OrderId} delivered by {driver.Name} to {order.CustomerName}");
-                }
-            }
-            
-            // Remove delivered orders from collection
-            foreach (var order in ordersToRemove)
-            {
-                _orders.Remove(order);
-            }
-        }
-    }
 
     private void CleanupOldOrders()
     {
         List<PizzaOrder> ordersToCleanup;
-        
+
         // Find old orders to cleanup using shared lock
         lock (CollectionLocks.OrdersLock)
         {
@@ -129,7 +72,7 @@ public class DeliveryCompletionService : BackgroundService
     private void CleanupDriverAssignments()
     {
         HashSet<string> validOrderIds;
-        
+
         // Get current valid order IDs using shared lock
         lock (CollectionLocks.OrdersLock)
         {
@@ -147,7 +90,9 @@ public class DeliveryCompletionService : BackgroundService
 
                 foreach (var orphanedOrderId in orphanedAssignments)
                 {
-                    driver.AssignedOrders.Remove(orphanedOrderId);
+                    var ordersWithout = driver.AssignedOrders.ToList();
+                    ordersWithout.Remove(orphanedOrderId);
+                    driver.AssignedOrders = ordersWithout;
                     Console.WriteLine($"🔧 Cleaned up orphaned assignment: {orphanedOrderId} from {driver.Name}");
                 }
             }

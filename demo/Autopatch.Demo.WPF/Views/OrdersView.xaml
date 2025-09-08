@@ -53,16 +53,6 @@
                 <!-- Order Time -->
                 <DataGridTextColumn Header="Ordered" Binding="{Binding OrderTime, StringFormat='{}{0:HH:mm:ss}'}" Width="80"/>
                 
-                <!-- ETA -->
-                <DataGridTemplateColumn Header="ETA" Width="80">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding EstimatedDelivery, StringFormat='{}{0:HH:mm}'}" 
-                                     Foreground="{Binding EstimatedDelivery, Converter={StaticResource ETAToColorConverter}}"/>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                
                 <!-- Assigned Driver -->
                 <DataGridTextColumn Header="Driver" Binding="{Binding AssignedDriverName}" Width="80"/>
                 

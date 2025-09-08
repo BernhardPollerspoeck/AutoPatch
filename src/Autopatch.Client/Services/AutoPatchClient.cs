@@ -20,26 +20,45 @@ public class AutoPatchClient(
     IServiceProvider serviceProvider)
     : IAutoPatchClient
 {
+    /// <summary>
+    /// JSON serializer options configured for property name case insensitivity.
+    /// </summary>
     private static readonly JsonSerializerOptions _jsonSerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
+
+    /// <summary>
+    /// The SignalR hub connection instance.
+    /// </summary>
     private HubConnection? _connection;
+
+    /// <summary>
+    /// Dictionary of active subscriptions keyed by method name.
+    /// </summary>
     private readonly Dictionary<string, Subscription> _subscriptions = [];
+
+    /// <summary>
+    /// Event raised when the connection state changes.
+    /// </summary>
+    public event EventHandler<bool>? OnConnectionChanged;
 
     /// <summary>
     /// Establishes a connection to the AutoPatch server using SignalR.
     /// </summary>
     /// <param name="cancellationToken">A token to cancel the connection operation.</param>
     /// <returns>A task that represents the asynchronous connection operation.</returns>
-    public Task ConnectAsync(CancellationToken cancellationToken = default)
+    public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         var builder = new HubConnectionBuilder()
             .WithUrl($"{options.Value.Endpoint}/Autopatch");
 
         _connection = builder.Build();
-        return _connection.StartAsync(cancellationToken);
-
+        _connection.Closed += HandleConnectionClosed;
+        _connection.Reconnected += HandleReconnected;
+        _connection.Reconnecting += HandleReconnecting;
+        await _connection.StartAsync(cancellationToken);
+        OnConnectionChanged?.Invoke(this, _connection.State is HubConnectionState.Connected);
     }
 
     /// <summary>
@@ -245,5 +264,41 @@ public class AutoPatchClient(
             JsonValueKind.Object => jsonElement,
             _ => jsonElement.ToString()
         };
+    }
+
+    /// <summary>
+    /// Handles the SignalR connection reconnecting event.
+    /// Notifies subscribers that the connection is temporarily unavailable.
+    /// </summary>
+    /// <param name="arg">Exception that caused the reconnection, if any.</param>
+    /// <returns>A completed task.</returns>
+    private Task HandleReconnecting(Exception? arg)
+    {
+        OnConnectionChanged?.Invoke(this, false);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Handles the SignalR connection reconnected event.
+    /// Notifies subscribers that the connection has been re-established.
+    /// </summary>
+    /// <param name="arg">Connection ID after reconnection.</param>
+    /// <returns>A completed task.</returns>
+    private Task HandleReconnected(string? arg)
+    {
+        OnConnectionChanged?.Invoke(this, true);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Handles the SignalR connection closed event.
+    /// Notifies subscribers that the connection has been lost.
+    /// </summary>
+    /// <param name="arg">Exception that caused the connection to close, if any.</param>
+    /// <returns>A completed task.</returns>
+    private Task HandleConnectionClosed(Exception? arg)
+    {
+        OnConnectionChanged?.Invoke(this, false);
+        return Task.CompletedTask;
     }
 }

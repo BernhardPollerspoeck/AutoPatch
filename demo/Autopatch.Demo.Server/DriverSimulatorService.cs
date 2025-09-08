@@ -8,27 +8,23 @@ namespace Autopatch.Demo.Server;
 /// Handles the complete driver lifecycle and position updates for live tracking.
 /// Thread-safe operations using shared locks to prevent conflicts with other services.
 /// </summary>
-public class DriverSimulatorService : BackgroundService
+public class DriverSimulatorService(
+    ObservableCollection<DeliveryDriver> drivers,
+    ObservableCollection<PizzaOrder> orders) : BackgroundService
 {
-    private readonly ObservableCollection<DeliveryDriver> _drivers;
-    private readonly ObservableCollection<PizzaOrder> _orders;
     private readonly Random _random = new();
+    private DateTime _lastUpdate = DateTime.UtcNow;
 
     private readonly string[] _driverNames = [
-        "Mario", "Luigi", "Tony", "Gino", "Enzo", "Marco", "Luca", "Pietro"
+        "Mario", "Luigi", "Tony", "Gino", "Enzo"
     ];
 
     // Driver lanes with 50px spacing to accommodate ~45px driver height
-    private readonly double[] _driverLanes = [80, 130, 180, 230, 280];
-    private int _driverCounter = 1;
+    private readonly double[] _driverLanes = [118, 174, 230, 286, 342];
 
-    public DriverSimulatorService(
-        ObservableCollection<DeliveryDriver> drivers,
-        ObservableCollection<PizzaOrder> orders)
-    {
-        _drivers = drivers;
-        _orders = orders;
-    }
+    // Fixed positions for consistent movement
+    private const double RestaurantX = 50.0;
+    private const double CustomerX = 540.0;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -37,12 +33,15 @@ public class DriverSimulatorService : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            // Update every 200ms for very smooth movement
-            await Task.Delay(TimeSpan.FromMilliseconds(200), stoppingToken);
+            // Update every 50ms for smooth movement (20 FPS)
+            await Task.Delay(TimeSpan.FromMilliseconds(50), stoppingToken);
+
+            var currentTime = DateTime.UtcNow;
+            var deltaTime = (currentTime - _lastUpdate).TotalSeconds;
+            _lastUpdate = currentTime;
 
             AssignReadyOrdersToDrivers();
-            UpdateDriverPositions();
-            ManageDriverAvailability();
+            UpdateDriverPositions(deltaTime);
         }
     }
 
@@ -50,20 +49,20 @@ public class DriverSimulatorService : BackgroundService
     {
         lock (CollectionLocks.DriversLock)
         {
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 5; i++)
             {
                 var driver = new DeliveryDriver
                 {
                     DriverId = $"DRV-{(char)('A' + i)}",
                     Name = _driverNames[i],
                     Status = DriverStatus.Available,
-                    X = 50, // Restaurant position
+                    X = RestaurantX, // Fixed restaurant position
                     Y = _driverLanes[i], // Use lanes with proper spacing
-                    DeliverySpeed = _random.Next(12, 25), // 2-3x faster speeds for demo
+                    DeliverySpeed = _random.Next(80, 150), // Pixels per second for smooth movement
                     AssignedOrders = []
                 };
-                
-                _drivers.Add(driver);
+
+                drivers.Add(driver);
                 Console.WriteLine($"🚗 Driver {driver.Name} ({driver.DriverId}) is now online");
             }
         }
@@ -72,12 +71,12 @@ public class DriverSimulatorService : BackgroundService
     private void AssignReadyOrdersToDrivers()
     {
         List<PizzaOrder> readyOrders;
-        List<DeliveryDriver> availableDrivers;
+        DeliveryDriver[] availableDrivers;
 
         // Create thread-safe snapshots of collections using shared locks
         lock (CollectionLocks.OrdersLock)
         {
-            readyOrders = _orders
+            readyOrders = orders
                 .Where(o => o.Status == OrderStatus.Ready && string.IsNullOrEmpty(o.AssignedDriverId))
                 .OrderBy(o => o.OrderTime)
                 .ToList();
@@ -85,10 +84,9 @@ public class DriverSimulatorService : BackgroundService
 
         lock (CollectionLocks.DriversLock)
         {
-            availableDrivers = _drivers
-                .Where(d => d.Status == DriverStatus.Available && d.AssignedOrders.Count < 2)
-                .ToList();
+            availableDrivers = [.. drivers.Where(d => d.Status == DriverStatus.Available && d.AssignedOrders.Count < 2)];
         }
+        Random.Shared.Shuffle(availableDrivers);
 
         // Process assignments outside of locks to minimize lock time
         foreach (var order in readyOrders)
@@ -98,9 +96,11 @@ public class DriverSimulatorService : BackgroundService
 
             // Safely assign order to driver
             AssignOrderToDriver(order, driver);
-            
+
             // Remove from available list for this iteration
-            availableDrivers.Remove(driver);
+            var cleanedList = availableDrivers.ToList();
+            cleanedList.Remove(driver);
+            availableDrivers = [.. cleanedList];
         }
     }
 
@@ -114,7 +114,7 @@ public class DriverSimulatorService : BackgroundService
             {
                 return; // Order already assigned or status changed
             }
-            
+
             order.AssignedDriverId = driver.DriverId;
             order.AssignedDriverName = driver.Name; // Store driver name for display
             order.Status = OrderStatus.OutForDelivery;
@@ -126,114 +126,109 @@ public class DriverSimulatorService : BackgroundService
             {
                 return; // Driver status changed
             }
-            
-            driver.AssignedOrders.Add(order.OrderId);
+
+            driver.AssignedOrders = [.. driver.AssignedOrders, order.OrderId];
             driver.Status = DriverStatus.Assigned;
-            driver.DeliverySpeed = _random.Next(12, 25); // 2-3x faster speeds for demo
+            driver.DeliverySpeed = _random.Next(80, 150); // Pixels per second for varied delivery speeds
         }
-        
-        Console.WriteLine($"📦 {driver.Name} assigned to {order.OrderId} (Speed: {driver.DeliverySpeed})");
+
+        Console.WriteLine($"📦 {driver.Name} assigned to {order.OrderId} (Speed: {driver.DeliverySpeed} px/s)");
     }
 
-    private void UpdateDriverPositions()
+    private void UpdateDriverPositions(double deltaTime)
     {
         List<DeliveryDriver> driversSnapshot;
-        
+
         // Create thread-safe snapshot using shared lock
         lock (CollectionLocks.DriversLock)
         {
-            driversSnapshot = _drivers.ToList();
+            driversSnapshot = [.. drivers];
         }
 
         // Process movements outside of lock
         foreach (var driver in driversSnapshot)
         {
-            UpdateSingleDriverPosition(driver);
+            UpdateSingleDriverPosition(driver, deltaTime);
         }
     }
 
-    private void UpdateSingleDriverPosition(DeliveryDriver driver)
+    private void UpdateSingleDriverPosition(DeliveryDriver driver, double deltaTime)
     {
         lock (CollectionLocks.DriversLock)
         {
             // Verify driver is still in collection and get current status
-            var currentDriver = _drivers.FirstOrDefault(d => d.DriverId == driver.DriverId);
+            var currentDriver = drivers.FirstOrDefault(d => d.DriverId == driver.DriverId);
             if (currentDriver == null) return; // Driver was removed
 
             switch (currentDriver.Status)
             {
                 case DriverStatus.Assigned:
                     // Start delivery faster - increased chance for demo
-                    if (_random.NextDouble() < 0.6)
+                    if (_random.NextDouble() < 0.3) // 30% chance per update (was 60% per 200ms)
                     {
                         currentDriver.Status = DriverStatus.Delivering;
-                        Console.WriteLine($"🚗 {currentDriver.Name} started delivery");
                     }
                     break;
 
                 case DriverStatus.Delivering:
-                    // Move towards customer (left to right)
-                    currentDriver.X += currentDriver.DeliverySpeed;
-                    
-                    // Check if reached customer (X = 540 to match layout)
-                    if (currentDriver.X >= 540)
+                    // Move towards customer using time-based movement
+                    var deliveryDistance = currentDriver.DeliverySpeed * deltaTime;
+                    var newX = currentDriver.X + deliveryDistance;
+
+                    // Check if reached or passed customer position
+                    if (newX >= CustomerX)
                     {
-                        currentDriver.X = 540;
+                        currentDriver.X = CustomerX; // Fixed customer position
                         currentDriver.Status = DriverStatus.Returning;
-                        Console.WriteLine($"📍 {currentDriver.Name} reached customer, starting return");
+
+                        //get the order and set it to deliverd
+                        var ordersToRemove = new List<PizzaOrder>();
+                        lock (CollectionLocks.OrdersLock)
+                        {
+                            foreach (var orderId in currentDriver.AssignedOrders)
+                            {
+                                var order = orders.FirstOrDefault(o => o.OrderId == orderId);
+                                if (order != null)
+                                {
+                                    // Mark order as delivered
+                                    order.Status = OrderStatus.Delivered;
+                                    ordersToRemove.Add(order);
+                                }
+                            }
+
+                            // Remove delivered orders from collection
+                            foreach (var order in ordersToRemove)
+                            {
+                                //orders.Remove(order);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        currentDriver.X = newX;
                     }
                     break;
 
                 case DriverStatus.Returning:
-                    // Move back to restaurant (right to left)
-                    currentDriver.X -= currentDriver.DeliverySpeed;
-                    
-                    // Check if reached restaurant (X = 50)
-                    if (currentDriver.X <= 50)
+                    // Move back to restaurant using time-based movement
+                    var returnDistance = currentDriver.DeliverySpeed * deltaTime;
+                    var newReturnX = currentDriver.X - returnDistance;
+
+                    // Check if reached or passed restaurant position
+                    if (newReturnX <= RestaurantX)
                     {
-                        currentDriver.X = 50;
+                        currentDriver.X = RestaurantX; // Fixed restaurant position
                         currentDriver.Status = DriverStatus.Available;
-                        currentDriver.AssignedOrders.Clear();
+                        currentDriver.AssignedOrders = [];
                         Console.WriteLine($"🏪 {currentDriver.Name} returned to restaurant");
+                    }
+                    else
+                    {
+                        currentDriver.X = newReturnX;
                     }
                     break;
             }
         }
     }
 
-    private void ManageDriverAvailability()
-    {
-        lock (CollectionLocks.DriversLock)
-        {
-            // Randomly add a new driver (5% chance if we have less than 5)
-            if (_drivers.Count < 5 && _random.NextDouble() < 0.05)
-            {
-                var laneIndex = _drivers.Count % _driverLanes.Length;
-                var driver = new DeliveryDriver
-                {
-                    DriverId = $"DRV-{_driverCounter++}",
-                    Name = _driverNames[_random.Next(_driverNames.Length)],
-                    Status = DriverStatus.Available,
-                    X = 50,
-                    Y = _driverLanes[laneIndex], // Use lane system for proper spacing
-                    DeliverySpeed = _random.Next(12, 25), // 2-3x faster speeds for demo
-                    AssignedOrders = []
-                };
-                
-                _drivers.Add(driver);
-                Console.WriteLine($"➕ New driver {driver.Name} came online");
-            }
-
-            // Rarely remove a driver (2% chance if we have more than 2)
-            if (_drivers.Count > 2 && _random.NextDouble() < 0.02)
-            {
-                var availableDriver = _drivers.FirstOrDefault(d => d.Status == DriverStatus.Available);
-                if (availableDriver != null)
-                {
-                    _drivers.Remove(availableDriver);
-                    Console.WriteLine($"➖ Driver {availableDriver.Name} went offline");
-                }
-            }
-        }
-    }
 }

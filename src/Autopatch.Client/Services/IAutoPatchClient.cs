@@ -8,6 +8,14 @@ namespace Autopatch.Client.Services;
 public interface IAutoPatchClient
 {
     /// <summary>
+    /// Occurs when the connection state changes.
+    /// </summary>
+    /// <remarks>The event is triggered whenever the connection status transitions between connected and
+    /// disconnected states. The event handler receives a <see cref="bool"/> parameter indicating the new connection
+    /// state: <see langword="true"/> if the connection is established; otherwise, <see langword="false"/>.</remarks>
+    event EventHandler<bool> OnConnectionChanged;
+
+    /// <summary>
     /// Establishes a connection to the AutoPatch server.
     /// </summary>
     /// <param name="cancellationToken">A token to cancel the connection operation.</param>

@@ -42,7 +42,7 @@ public partial class MainViewModel : ObservableObject
         StatisticsViewModel = statisticsViewModel;
 
         // Setup event handlers
-        //_autoPatchClient.OnConnectionChanged += OnConnectionChanged;
+        _autoPatchClient.OnConnectionChanged += OnConnectionChanged;
         //_autoPatchClient.OnError += OnError;
 
         // Start clock timer
@@ -56,12 +56,12 @@ public partial class MainViewModel : ObservableObject
         CurrentTime = DateTime.Now;
     }
 
-    private void OnConnectionChanged(bool isConnected)
+    private void OnConnectionChanged(object? sender, bool isConnected)
     {
         ConnectionStatus = isConnected ? "Connected" : "Disconnected";
         ConnectionStatusColor = isConnected ? "LimeGreen" : "Red";
-        
-        StatusMessage = isConnected 
+
+        StatusMessage = isConnected
             ? "🚀 AutoPatch Connected - Live data flowing"
             : "⚠️ AutoPatch Disconnected - Attempting reconnection";
     }
