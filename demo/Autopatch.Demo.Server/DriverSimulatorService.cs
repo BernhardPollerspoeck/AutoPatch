@@ -199,7 +199,7 @@ public class DriverSimulatorService(
                             // Remove delivered orders from collection
                             foreach (var order in ordersToRemove)
                             {
-                                //orders.Remove(order);
+                                // orders.Remove(order);
                             }
                         }
                     }
