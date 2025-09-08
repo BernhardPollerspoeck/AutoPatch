@@ -1,0 +1,78 @@
+<UserControl x:Class="Autopatch.Demo.WPF.Views.OrdersView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shared="clr-namespace:Autopatch.Demo.Shared;assembly=Autopatch.Demo.Shared">
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="📋 Live Orders" Style="{StaticResource HeaderStyle}"/>
+        
+        <!-- Orders DataGrid -->
+        <DataGrid Grid.Row="1" ItemsSource="{Binding Orders}" 
+                  SelectedItem="{Binding SelectedOrder}"
+                  Background="White">
+            
+            <DataGrid.Columns>
+                
+                <!-- Order ID -->
+                <DataGridTextColumn Header="Order #" Binding="{Binding OrderId}" Width="80"/>
+                
+                <!-- Customer -->
+                <DataGridTextColumn Header="Customer" Binding="{Binding CustomerName}" Width="120"/>
+                
+                <!-- Items -->
+                <DataGridTemplateColumn Header="Items" Width="150">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Items, Converter={StaticResource ItemsListConverter}}" 
+                                     TextWrapping="Wrap" Margin="5"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                
+                <!-- Status with Color Coding -->
+                <DataGridTemplateColumn Header="Status" Width="100">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Border CornerRadius="3" Padding="5,2" Margin="2">
+                                <Border.Background>
+                                    <SolidColorBrush Color="{Binding Status, Converter={StaticResource OrderStatusToColorConverter}}"/>
+                                </Border.Background>
+                                <TextBlock Text="{Binding Status}" Foreground="White" 
+                                         FontWeight="Bold" HorizontalAlignment="Center"/>
+                            </Border>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                
+                <!-- Order Time -->
+                <DataGridTextColumn Header="Ordered" Binding="{Binding OrderTime, StringFormat='{}{0:HH:mm:ss}'}" Width="80"/>
+                
+                <!-- Assigned Driver -->
+                <DataGridTextColumn Header="Driver" Binding="{Binding AssignedDriverName}" Width="80"/>
+                
+            </DataGrid.Columns>
+            
+            <!-- Row Style for Status-based highlighting -->
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Status}" Value="{x:Static shared:OrderStatus.Ready}">
+                            <Setter Property="Background" Value="LightGreen"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Status}" Value="{x:Static shared:OrderStatus.OutForDelivery}">
+                            <Setter Property="Background" Value="LightCoral"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+            
+        </DataGrid>
+        
+    </Grid>
+</UserControl>
