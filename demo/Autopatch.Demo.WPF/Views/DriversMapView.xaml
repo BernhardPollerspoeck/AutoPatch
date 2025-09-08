@@ -1,0 +1,152 @@
+<UserControl x:Class="Autopatch.Demo.WPF.Views.DriversMapView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shared="clr-namespace:Autopatch.Demo.Shared;assembly=Autopatch.Demo.Shared">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0"
+                    Orientation="Horizontal"
+                    Margin="0,0,0,10">
+            <TextBlock Text="🗺️ Driver Map"
+                       Style="{StaticResource HeaderStyle}" />
+            <TextBlock Text="(Left=Restaurant → Right=Customer)"
+                       FontStyle="Italic"
+                       VerticalAlignment="Center"
+                       Margin="10,0"
+                       Foreground="Gray" />
+        </StackPanel>
+
+        <!-- Driver Map Canvas -->
+        <Border Grid.Row="1"
+                BorderBrush="DarkGray"
+                BorderThickness="2"
+                Background="LightGreen">
+
+            <Canvas Name="DriverMapCanvas"
+                    Width="700"
+                    Height="400">
+
+                <!-- Restaurant Icon (Fixed Position) -->
+                <Border Canvas.Left="20"
+                        Canvas.Top="20"
+                        Background="Orange"
+                        CornerRadius="8"
+                        Padding="8"
+                        BorderBrush="DarkOrange"
+                        BorderThickness="2">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🏪"
+                                   FontSize="16"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="Poller's Pizza Palace"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center"
+                                   Margin="5,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Customer Zone Icon (Fixed Position) -->
+                <Border Canvas.Right="20"
+                        Canvas.Top="20"
+                        Background="Purple"
+                        CornerRadius="8"
+                        Padding="8"
+                        BorderBrush="DarkMagenta"
+                        BorderThickness="2">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="📍"
+                                   FontSize="16"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="Customer Zone"
+                                   FontWeight="Bold"
+                                   VerticalAlignment="Center"
+                                   Margin="5,0"
+                                   Foreground="White" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Direction Arrow -->
+                <Line X1="200"
+                      Y1="40"
+                      X2="530"
+                      Y2="40"
+                      Stroke="Gray"
+                      StrokeThickness="2"
+                      StrokeDashArray="5,5" />
+                <Polygon Canvas.Left="520"
+                         Canvas.Top="35"
+                         Fill="Gray">
+                    <Polygon.Points>
+                        <Point X="0"
+                               Y="0" />
+                        <Point X="10"
+                               Y="5" />
+                        <Point X="0"
+                               Y="10" />
+                    </Polygon.Points>
+                </Polygon>
+
+                <!-- Dynamic Driver Icons -->
+                <ItemsControl ItemsSource="{Binding Drivers}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Canvas.Left"
+                                    Value="{Binding X}" />
+                            <Setter Property="Canvas.Top"
+                                    Value="{Binding Y}" />
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+
+                                <!-- Driver Icon with Status Color -->
+                                <Border CornerRadius="15"
+                                        Padding="5"
+                                        BorderThickness="2"
+                                        BorderBrush="Black">
+                                    <Border.Background>
+                                        <SolidColorBrush Color="{Binding Status, Converter={StaticResource DriverStatusToColorConverter}}" />
+                                    </Border.Background>
+                                    <TextBlock Text="🚗"
+                                               FontSize="14" />
+                                </Border>
+
+                                <!-- Driver Info -->
+                                <StackPanel Margin="5,0"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontWeight="Bold"
+                                               FontSize="10" />
+                                    <TextBlock Text="{Binding Status}"
+                                               FontSize="8"
+                                               Foreground="DarkBlue" />
+                                    <TextBlock Text="{Binding AssignedOrders.Count, StringFormat='Orders: {0}'}"
+                                               FontSize="8"
+                                               Foreground="Gray" />
+                                </StackPanel>
+
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+            </Canvas>
+
+        </Border>
+
+    </Grid>
+</UserControl>

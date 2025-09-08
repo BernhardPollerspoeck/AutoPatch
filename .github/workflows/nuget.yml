@@ -81,10 +81,10 @@ jobs:
         Write-Host "Setting package version to: $version"
     
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore -p:EnableWindowsTargeting=true
     
     - name: Build
-      run: dotnet build --configuration Debug  # Use Debug for better coverage information
+      run: dotnet build --configuration Debug -p:EnableWindowsTargeting=true  # Use Debug for better coverage information
     
     - name: Install coverage tools
       run: |
@@ -141,7 +141,7 @@ jobs:
       continue-on-error: true
     
     - name: Create NuGet packages
-      run: dotnet pack --configuration Release --output packages
+      run: dotnet pack --configuration Release --output packages -p:EnableWindowsTargeting=true
     
     - name: Upload NuGet packages artifact
       uses: actions/upload-artifact@v4

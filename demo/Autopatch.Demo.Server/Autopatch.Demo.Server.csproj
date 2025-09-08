@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Autopatch.Server\Autopatch.Server.csproj" />
+    <ProjectReference Include="..\Autopatch.Demo.Shared\Autopatch.Demo.Shared.csproj" />
+  </ItemGroup>
+
+</Project>
