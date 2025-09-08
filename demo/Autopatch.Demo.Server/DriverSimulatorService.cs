@@ -181,7 +181,7 @@ public class DriverSimulatorService(
                         currentDriver.X = CustomerX; // Fixed customer position
                         currentDriver.Status = DriverStatus.Returning;
 
-                        //get the order and set it to deliverd
+                        //get the order and set it to delivered
                         var ordersToRemove = new List<PizzaOrder>();
                         lock (CollectionLocks.OrdersLock)
                         {
