@@ -8,7 +8,7 @@ namespace Autopatch.Server.Extensions;
 /// </summary>
 /// <remarks>This method maps the AutoPatch SignalR hub to the endpoint "/Autopatch".  It should be called during
 /// the application's startup configuration to enable the AutoPatch functionality.</remarks>
-public static class IWebApplicationExetensions
+public static class IWebApplicationExtensions
 {
     /// <summary>
     /// Configures the application to use the AutoPatch hub at the specified endpoint.
