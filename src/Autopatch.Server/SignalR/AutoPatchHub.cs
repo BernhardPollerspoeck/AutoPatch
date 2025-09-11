@@ -11,7 +11,8 @@ namespace Autopatch.Server.SignalR;
 /// in the tracked collections. It leverages SignalR groups to manage subscriptions efficiently.
 /// </remarks>
 /// <param name="collectionManager">The collection manager that handles dynamic creation and retrieval of tracked collections.</param>
-public class AutoPatchHub(ITrackedCollectionManager collectionManager) : Hub
+/// <param name="serviceProvider">Service provider for resolving validators.</param>
+public class AutoPatchHub(ITrackedCollectionManager collectionManager, IServiceProvider serviceProvider) : Hub
 {
 
     /// <summary>
@@ -19,18 +20,61 @@ public class AutoPatchHub(ITrackedCollectionManager collectionManager) : Hub
     /// </summary>
     /// <param name="typeName">The name of the type to subscribe to for receiving updates.</param>
     /// <param name="key">Optional key to identify a specific collection of this type. If null, uses the default collection.</param>
-    /// <returns>A task that represents the asynchronous subscription operation.</returns>
+    /// <param name="authString">Optional authentication string for subscription validation.</param>
+    /// <returns>A task that returns true if subscription was successful, false if rejected by validation.</returns>
     /// <remarks>
     /// When a client subscribes to a type, they are added to a SignalR group named "AutoPatch/{typeName}" or "AutoPatch/{typeName}/{key}".
     /// If a tracker exists for the specified type and key, the full current state of the data is immediately sent to the client.
+    /// If a validator is registered for the type, it will always be called regardless of whether authString is provided.
     /// </remarks>
-    public async Task SubscribeToType(string typeName, string? key = null)
+    public async Task<bool> SubscribeToType(string typeName, string? key = null, string? authString = null)
     {
+        // If a validator exists, always validate (let the validator decide if null/empty auth is acceptable)
+        if (!ValidateSubscription(typeName, key ?? string.Empty, authString))
+        {
+            return false;
+        }
+
         var subscriptionKey = GetSubscriptionKey(typeName, key);
         await Groups.AddToGroupAsync(Context.ConnectionId, $"AutoPatch/{subscriptionKey}");
 
         var tracker = collectionManager.GetAllTrackers().FirstOrDefault(t => t.GetSubscriptionKey() == subscriptionKey);
         tracker?.SendFullData(Context.ConnectionId);
+        
+        return true;
+    }
+
+    /// <summary>
+    /// Validates a subscription request using the registered validator for the type.
+    /// </summary>
+    /// <param name="typeName">The name of the type being subscribed to.</param>
+    /// <param name="collectionKey">The collection key.</param>
+    /// <param name="authString">The authentication string to validate (can be null).</param>
+    /// <returns>True if validation passes or no validator is registered; false if validation fails.</returns>
+    private bool ValidateSubscription(string typeName, string collectionKey, string? authString)
+    {
+        // Try to resolve validator using reflection
+        var validatorType = typeof(ICollectionSubscriptionValidator<>);
+        
+        // Find the type in loaded assemblies
+        var itemType = AppDomain.CurrentDomain.GetAssemblies()
+            .SelectMany(a => a.GetTypes())
+            .FirstOrDefault(t => t.Name == typeName);
+            
+        if (itemType == null)
+            return true; // Type not found, allow subscription (no validation possible)
+            
+        var genericValidatorType = validatorType.MakeGenericType(itemType);
+        var validator = serviceProvider.GetService(genericValidatorType);
+        
+        if (validator == null)
+            return true; // No validator registered, allow subscription
+            
+        // Validator exists - ALWAYS call it, let it decide if null/empty auth is acceptable
+        var method = genericValidatorType.GetMethod("ValidateSubscription");
+        var result = method?.Invoke(validator, [authString ?? string.Empty, collectionKey]);
+        
+        return result is bool boolResult && boolResult;
     }
 
     /// <summary>

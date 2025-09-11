@@ -59,4 +59,37 @@ public static class IServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Registers a tracked observable collection type with subscription validation.
+    /// Collections can be created at runtime with different keys using ITrackedCollectionManager.
+    /// </summary>
+    /// <typeparam name="TItem">The type of items in the collection. Must be a reference type that implements <see cref="INotifyPropertyChanged"/>.</typeparam>
+    /// <typeparam name="TValidator">The validator type that implements <see cref="ICollectionSubscriptionValidator{TItem}"/>.</typeparam>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
+    /// <param name="configure">An optional delegate to configure the object type configuration for the tracked collection.</param>
+    /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
+    /// <remarks>
+    /// This method registers the necessary services for creating tracked collections at runtime with subscription validation.
+    /// Use ITrackedCollectionManager.GetOrCreateCollection&lt;TItem&gt;(key) to get collections with specific keys.
+    /// </remarks>
+    public static IServiceCollection AddTrackedCollection<TItem, TValidator>(
+            this IServiceCollection services,
+            Action<ObjectTypeConfiguration<OperationContainer<TItem>>>? configure = null)
+            where TItem : class, INotifyPropertyChanged
+            where TValidator : class, ICollectionSubscriptionValidator<TItem>
+    {
+        if (configure != null)
+        {
+            services.Configure(configure);
+        }
+
+        // Register factory for creating trackers at runtime
+        services.AddSingleton<ITrackedCollectionFactory<TItem>, TrackedCollectionFactory<TItem>>();
+        
+        // Register the validator
+        services.AddScoped<ICollectionSubscriptionValidator<TItem>, TValidator>();
+
+        return services;
+    }
 }

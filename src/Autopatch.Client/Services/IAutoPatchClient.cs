@@ -37,11 +37,12 @@ public interface IAutoPatchClient
     /// </summary>
     /// <typeparam name="T">The type to subscribe to for updates.</typeparam>
     /// <param name="key">Optional key to identify a specific collection of this type. If null, uses the default collection.</param>
+    /// <param name="authString">Optional authentication string for subscription validation.</param>
     /// <param name="cancellationToken">A token to cancel the subscription operation.</param>
-    /// <returns>A task that represents the asynchronous subscription operation.</returns>
+    /// <returns>A task that returns true if subscription was successful, false if rejected by server validation.</returns>
     /// <exception cref="InvalidOperationException">Thrown when not connected to the server.</exception>
     /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
-    Task SubscribeToTypeAsync<T>(string? key = null, CancellationToken cancellationToken = default) where T : class;
+    Task<bool> SubscribeToTypeAsync<T>(string? key = null, string? authString = null, CancellationToken cancellationToken = default) where T : class;
 
     /// <summary>
     /// Unsubscribes from real-time updates for the specified type.

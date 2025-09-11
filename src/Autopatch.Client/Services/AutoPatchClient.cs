@@ -79,10 +79,11 @@ public class AutoPatchClient(
     /// </summary>
     /// <typeparam name="T">The type to subscribe to for updates.</typeparam>
     /// <param name="key">Optional key to identify a specific collection of this type. If null, uses the default collection.</param>
+    /// <param name="authString">Optional authentication string for subscription validation.</param>
     /// <param name="cancellationToken">A token to cancel the subscription operation.</param>
-    /// <returns>A task that represents the asynchronous subscription operation.</returns>
+    /// <returns>A task that returns true if subscription was successful, false if rejected by server validation.</returns>
     /// <exception cref="InvalidOperationException">Thrown when not connected to the server.</exception>
-    public async Task SubscribeToTypeAsync<T>(string? key = null, CancellationToken cancellationToken = default)
+    public async Task<bool> SubscribeToTypeAsync<T>(string? key = null, string? authString = null, CancellationToken cancellationToken = default)
         where T : class
     {
         if (_connection == null)
@@ -100,7 +101,20 @@ public class AutoPatchClient(
 
         _connection.On<string, Operation[], bool>(methodName, HandleAutoPatchItem);
 
-        await _connection.InvokeAsync("SubscribeToType", typeof(T).Name, key, cancellationToken);
+        var result = await _connection.InvokeAsync<bool>("SubscribeToType", typeof(T).Name, key, authString, cancellationToken);
+        
+        // If subscription was rejected, clean up local subscription
+        if (!result && _subscriptions.TryGetValue(methodName, out var failedSubscription))
+        {
+            failedSubscription.Subscribers--;
+            if (failedSubscription.Subscribers == 0)
+            {
+                _subscriptions.Remove(methodName);
+                _connection.Remove(methodName);
+            }
+        }
+        
+        return result;
     }
 
     /// <summary>
