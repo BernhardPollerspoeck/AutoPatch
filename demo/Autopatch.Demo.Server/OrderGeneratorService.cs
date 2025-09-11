@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Autopatch.Demo.Shared;
+using Autopatch.Server.Services;
 
 namespace Autopatch.Demo.Server;
 
@@ -8,9 +9,9 @@ namespace Autopatch.Demo.Server;
 /// Creates orders with random customer names, items, and assigns unique order IDs.
 /// Thread-safe operations using shared locks to prevent conflicts with other services.
 /// </summary>
-public class OrderGeneratorService : BackgroundService
+public class OrderGeneratorService(ITrackedCollectionManager collectionManager) : BackgroundService
 {
-    private readonly ObservableCollection<PizzaOrder> _orders;
+    private readonly ObservableCollection<PizzaOrder> _orders = collectionManager.GetOrCreateCollection<PizzaOrder>();
     private readonly Random _random = new();
     private int _orderCounter = 1000;
 
@@ -28,11 +29,6 @@ public class OrderGeneratorService : BackgroundService
     private readonly string[] _drinks = [
         "Cola", "Fanta", "Sprite", "Water", "Beer"
     ];
-
-    public OrderGeneratorService(ObservableCollection<PizzaOrder> orders)
-    {
-        _orders = orders;
-    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -83,10 +79,11 @@ public class OrderGeneratorService : BackgroundService
 
     private List<string> GenerateRandomItems()
     {
-        var items = new List<string>();
-
-        // Always at least one pizza
-        items.Add(_pizzaTypes[_random.Next(_pizzaTypes.Length)]);
+        var items = new List<string>
+        {
+            // Always at least one pizza
+            _pizzaTypes[_random.Next(_pizzaTypes.Length)]
+        };
 
         // 30% chance for second pizza
         if (_random.NextDouble() < 0.3)

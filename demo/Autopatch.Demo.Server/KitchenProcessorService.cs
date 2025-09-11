@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Autopatch.Demo.Shared;
+using Autopatch.Server.Services;
 
 namespace Autopatch.Demo.Server;
 
@@ -8,15 +9,10 @@ namespace Autopatch.Demo.Server;
 /// Simulates kitchen workflow with realistic timing for each stage.
 /// Thread-safe operations using shared locks to prevent conflicts with other services.
 /// </summary>
-public class KitchenProcessorService : BackgroundService
+public class KitchenProcessorService(ITrackedCollectionManager collectionManager) : BackgroundService
 {
-    private readonly ObservableCollection<PizzaOrder> _orders;
+    private readonly ObservableCollection<PizzaOrder> _orders = collectionManager.GetOrCreateCollection<PizzaOrder>();
     private readonly Random _random = new();
-
-    public KitchenProcessorService(ObservableCollection<PizzaOrder> orders)
-    {
-        _orders = orders;
-    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -36,11 +32,10 @@ public class KitchenProcessorService : BackgroundService
         // Create thread-safe snapshot of orders to process using shared lock
         lock (CollectionLocks.OrdersLock)
         {
-            ordersToProcess = _orders
-                .Where(o => o.Status != OrderStatus.OutForDelivery && 
-                           o.Status != OrderStatus.Delivered)
-                .OrderBy(o => o.OrderTime)
-                .ToList();
+            ordersToProcess = [.. _orders
+                .Where(o => o.Status is not OrderStatus.OutForDelivery and
+                           not OrderStatus.Delivered)
+                .OrderBy(o => o.OrderTime)];
         }
 
         // Process each order outside of lock to minimize lock time
@@ -64,7 +59,7 @@ public class KitchenProcessorService : BackgroundService
                 var newStatus = GetNextStatus(currentOrder.Status);
                 var oldStatus = currentOrder.Status;
                 currentOrder.Status = newStatus;
-                
+
                 // Update ETA based on new status
                 UpdateEstimatedDelivery(currentOrder);
                 
@@ -88,7 +83,7 @@ public class KitchenProcessorService : BackgroundService
         };
     }
 
-    private OrderStatus GetNextStatus(OrderStatus currentStatus)
+    private static OrderStatus GetNextStatus(OrderStatus currentStatus)
     {
         return currentStatus switch
         {
@@ -99,7 +94,7 @@ public class KitchenProcessorService : BackgroundService
         };
     }
 
-    private void UpdateEstimatedDelivery(PizzaOrder order)
+    private static void UpdateEstimatedDelivery(PizzaOrder order)
     {
         var additionalMinutes = order.Status switch
         {

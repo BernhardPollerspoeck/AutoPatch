@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Autopatch.Core;
 using Autopatch.Server.Models;
@@ -28,25 +27,22 @@ public static class IServiceCollectionExtensions
         services.Configure(configure);
 
         services.AddHostedService<AutoPatchCollectionTrackerService>();
+        services.AddSingleton<ITrackedCollectionManager, TrackedCollectionManager>();
 
         return services;
     }
 
     /// <summary>
-    /// Registers a tracked observable collection of the specified item type with the dependency injection container.
+    /// Registers a tracked observable collection type with the dependency injection container.
+    /// Collections can be created at runtime with different keys using ITrackedCollectionManager.
     /// </summary>
     /// <typeparam name="TItem">The type of items in the collection. Must be a reference type that implements <see cref="INotifyPropertyChanged"/>.</typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
     /// <param name="configure">An optional delegate to configure the object type configuration for the tracked collection.</param>
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     /// <remarks>
-    /// This method registers all necessary services for tracking an observable collection including:
-    /// <list type="bullet">
-    /// <item><description>The collection tracker service</description></item>
-    /// <item><description>Object tracker interfaces</description></item>
-    /// <item><description>The observable collection itself</description></item>
-    /// <item><description>A bulk flush queue for operations</description></item>
-    /// </list>
+    /// This method registers the necessary services for creating tracked collections at runtime.
+    /// Use ITrackedCollectionManager.GetOrCreateCollection&lt;TItem&gt;(key) to get collections with specific keys.
     /// </remarks>
     public static IServiceCollection AddTrackedCollection<TItem>(
             this IServiceCollection services,
@@ -58,11 +54,8 @@ public static class IServiceCollectionExtensions
             services.Configure(configure);
         }
 
-        services.AddSingleton<ObservableCollectionTracker<TItem>>();
-        services.AddSingleton<IObjectTracker<ObservableCollection<TItem>, TItem>>(sp => sp.GetRequiredService<ObservableCollectionTracker<TItem>>());
-        services.AddSingleton<IObjectTracker>(sp => sp.GetRequiredService<ObservableCollectionTracker<TItem>>());
-        services.AddSingleton(sp => sp.GetRequiredService<IObjectTracker<ObservableCollection<TItem>, TItem>>().TrackedCollection);
-        services.AddSingleton<BulkFlushQueue<OperationContainer<TItem>>>();
+        // Register factory for creating trackers at runtime
+        services.AddSingleton<ITrackedCollectionFactory<TItem>, TrackedCollectionFactory<TItem>>();
 
         return services;
     }

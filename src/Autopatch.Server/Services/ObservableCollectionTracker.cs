@@ -20,6 +20,7 @@ namespace Autopatch.Server.Services;
 /// <param name="options">Options for configuring the object type tracking behavior.</param>
 /// <param name="logger">Logger for logging information and errors.</param>
 /// <param name="hubContext">The SignalR hub context for communicating with clients.</param>
+/// <param name="key">Optional key to identify a specific collection instance.</param>
 /// <remarks>
 /// This tracker monitors changes to both the collection itself (add/remove operations) and properties 
 /// of individual items within the collection. All changes are converted to JSON Patch operations
@@ -29,7 +30,8 @@ public class ObservableCollectionTracker<T>(
     BulkFlushQueue<OperationContainer<T>> queue,
     IOptions<ObjectTypeConfiguration<OperationContainer<T>>> options,
     ILogger<ObservableCollectionTracker<T>> logger,
-    IHubContext<AutoPatchHub> hubContext)
+    IHubContext<AutoPatchHub> hubContext,
+    string? key = null)
     : IObjectTracker<ObservableCollection<T>, T>, IDisposable
     where T : class, INotifyPropertyChanged
 {
@@ -63,6 +65,12 @@ public class ObservableCollectionTracker<T>(
     /// </summary>
     /// <value>The simple name of type <typeparamref name="T"/>.</value>
     public string TypeName => typeof(T).Name;
+
+    /// <summary>
+    /// Gets the key that identifies this specific collection instance.
+    /// </summary>
+    /// <value>A string representing the key for this collection, or null for the default collection.</value>
+    public string? Key => key;
 
     /// <summary>
     /// Gets the observable collection that is being tracked for changes.
@@ -102,7 +110,7 @@ public class ObservableCollectionTracker<T>(
         queue.OnFlush -= HandleQueueFlush;
 
         // Clean up PropertyChanged events from all items to prevent memory leaks
-        foreach (T item in TrackedCollection)
+        foreach (var item in TrackedCollection)
         {
             item.PropertyChanged -= HandleItemPropertyChanged;
         }
@@ -235,7 +243,7 @@ public class ObservableCollectionTracker<T>(
     /// </remarks>
     private async Task HandleQueueFlush(List<OperationContainer<T>> containers)
     {
-        var target = $"AutoPatch/{typeof(T).Name}";
+        var target = $"AutoPatch/{(this as IObjectTracker).GetSubscriptionKey()}";
         foreach (var container in containers)
         {
             if (container is FullDataOperationContainer<T> fullData)
@@ -265,7 +273,9 @@ public class ObservableCollectionTracker<T>(
     /// </remarks>
     public void Dispose()
     {
+        GC.SuppressFinalize(this);
         StopTracking();
         _propertyCache.Clear();
+        queue.Dispose();
     }
 }

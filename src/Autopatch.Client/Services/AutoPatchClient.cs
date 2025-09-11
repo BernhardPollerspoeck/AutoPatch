@@ -78,16 +78,18 @@ public class AutoPatchClient(
     /// Subscribes to real-time updates for the specified type.
     /// </summary>
     /// <typeparam name="T">The type to subscribe to for updates.</typeparam>
+    /// <param name="key">Optional key to identify a specific collection of this type. If null, uses the default collection.</param>
     /// <param name="cancellationToken">A token to cancel the subscription operation.</param>
     /// <returns>A task that represents the asynchronous subscription operation.</returns>
     /// <exception cref="InvalidOperationException">Thrown when not connected to the server.</exception>
-    public async Task SubscribeToTypeAsync<T>(CancellationToken cancellationToken = default)
+    public async Task SubscribeToTypeAsync<T>(string? key = null, CancellationToken cancellationToken = default)
         where T : class
     {
         if (_connection == null)
             throw new InvalidOperationException("Not connected.");
 
-        var methodName = $"AutoPatch/{typeof(T).Name}";
+        var subscriptionKey = GetSubscriptionKey<T>(key);
+        var methodName = $"AutoPatch/{subscriptionKey}";
 
         var collection = serviceProvider.GetRequiredService<ObservableCollection<T>>();
         if (!_subscriptions.TryAdd(methodName, new Subscription(collection, typeof(T)))
@@ -98,46 +100,64 @@ public class AutoPatchClient(
 
         _connection.On<string, Operation[], bool>(methodName, HandleAutoPatchItem);
 
-        await _connection.InvokeAsync("SubscribeToType", typeof(T).Name, cancellationToken);
+        await _connection.InvokeAsync("SubscribeToType", typeof(T).Name, key, cancellationToken);
     }
 
     /// <summary>
     /// Unsubscribes from real-time updates for the specified type.
     /// </summary>
     /// <typeparam name="T">The type to unsubscribe from.</typeparam>
+    /// <param name="key">Optional key to identify a specific collection of this type. If null, uses the default collection.</param>
     /// <param name="cancellationToken">A token to cancel the unsubscription operation.</param>
     /// <returns>A task that represents the asynchronous unsubscription operation.</returns>
     /// <exception cref="InvalidOperationException">Thrown when not connected to the server.</exception>
-    public Task UnsubscribeFromTypeAsync<T>(CancellationToken cancellationToken = default)
+    public Task UnsubscribeFromTypeAsync<T>(string? key = null, CancellationToken cancellationToken = default)
         where T : class
     {
-        if (_subscriptions.TryGetValue($"AutoPatch/{typeof(T).Name}", out var subscription))
+        var subscriptionKey = GetSubscriptionKey<T>(key);
+        var methodName = $"AutoPatch/{subscriptionKey}";
+        
+        if (_subscriptions.TryGetValue(methodName, out var subscription))
         {
             subscription.Subscribers--;
             if (subscription.Subscribers == 0)
-                _subscriptions.Remove($"AutoPatch/{typeof(T).Name}");
+                _subscriptions.Remove(methodName);
         }
-
 
         if (_connection == null)
             throw new InvalidOperationException("Not connected.");
 
-        _connection.Remove($"AutoPatch/{typeof(T).Name}");
-        return _connection.InvokeAsync("UnsubscribeFromType", typeof(T).Name, cancellationToken);
+        _connection.Remove(methodName);
+        return _connection.InvokeAsync("UnsubscribeFromType", typeof(T).Name, key, cancellationToken);
     }
 
     /// <summary>
     /// Gets the tracked collection for the specified type.
     /// </summary>
     /// <typeparam name="T">The type of items in the collection.</typeparam>
+    /// <param name="key">Optional key to identify a specific collection of this type. If null, uses the default collection.</param>
     /// <returns>An observable collection that is synchronized with the server data.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the type is not subscribed.</exception>
-    public ObservableCollection<T> GetTrackedCollection<T>()
+    public ObservableCollection<T> GetTrackedCollection<T>(string? key = null)
         where T : class
     {
-        return _subscriptions.TryGetValue($"AutoPatch/{typeof(T).Name}", out var subscription)
+        var subscriptionKey = GetSubscriptionKey<T>(key);
+        var methodName = $"AutoPatch/{subscriptionKey}";
+        
+        return _subscriptions.TryGetValue(methodName, out var subscription)
             ? (ObservableCollection<T>)subscription.TrackedCollection
-            : throw new InvalidOperationException($"Type {typeof(T).Name} is not subscribed.");
+            : throw new InvalidOperationException($"Type {typeof(T).Name} with key '{key ?? "default"}' is not subscribed.");
+    }
+
+    /// <summary>
+    /// Gets the subscription key for a type and optional key parameter.
+    /// </summary>
+    /// <typeparam name="T">The type to get the subscription key for.</typeparam>
+    /// <param name="key">Optional key to identify a specific collection.</param>
+    /// <returns>The subscription key in format "TypeName" or "TypeName/Key".</returns>
+    private static string GetSubscriptionKey<T>(string? key)
+    {
+        return string.IsNullOrEmpty(key) ? typeof(T).Name : $"{typeof(T).Name}/{key}";
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Autopatch.Demo.Shared;
+using Autopatch.Server.Services;
 
 namespace Autopatch.Demo.Server;
 
@@ -8,20 +9,21 @@ namespace Autopatch.Demo.Server;
 /// Handles the final stage of the order lifecycle and cleanup.
 /// Thread-safe operations using shared locks to prevent conflicts with other services.
 /// </summary>
-public class DeliveryCompletionService : BackgroundService
+public class DeliveryCompletionService(ITrackedCollectionManager collectionManager) : BackgroundService
 {
-    private readonly ObservableCollection<PizzaOrder> _orders;
-    private readonly ObservableCollection<DeliveryDriver> _drivers;
-    private readonly Random _random = new();
+    private readonly ObservableCollection<PizzaOrder> _orders = collectionManager.GetOrCreateCollection<PizzaOrder>();
+    private readonly ObservableCollection<DeliveryDriver> _drivers = collectionManager.GetOrCreateCollection<DeliveryDriver>();
 
-    public DeliveryCompletionService(
-        ObservableCollection<PizzaOrder> orders,
-        ObservableCollection<DeliveryDriver> drivers)
-    {
-        _orders = orders;
-        _drivers = drivers;
-    }
-
+    /// <summary>
+    /// Executes the background service loop for delivery completion and cleanup operations.
+    /// Continuously monitors for old orders that need to be removed from the system.
+    /// </summary>
+    /// <param name="stoppingToken">Token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <remarks>
+    /// Runs on a 25ms interval for responsive demo behavior. 
+    /// Uses thread-safe operations with shared locks to coordinate with other services.
+    /// </remarks>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -33,10 +35,15 @@ public class DeliveryCompletionService : BackgroundService
         }
     }
 
-
-
-
-
+    /// <summary>
+    /// Removes orders that are older than 5 minutes from the system and cleans up associated driver assignments.
+    /// Performs two-stage cleanup: first removes old orders, then cleans orphaned driver assignments.
+    /// </summary>
+    /// <remarks>
+    /// Uses shared locks to ensure thread safety when accessing collections.
+    /// Orders older than 5 minutes are considered completed and removed to prevent memory growth.
+    /// Automatically triggers driver assignment cleanup to maintain data consistency.
+    /// </remarks>
     private void CleanupOldOrders()
     {
         List<PizzaOrder> ordersToCleanup;
@@ -44,23 +51,17 @@ public class DeliveryCompletionService : BackgroundService
         // Find old orders to cleanup using shared lock
         lock (CollectionLocks.OrdersLock)
         {
-            ordersToCleanup = _orders
-                .Where(o => DateTime.Now - o.OrderTime > TimeSpan.FromMinutes(5)) // Much faster cleanup for demo - 5 minutes instead of 1 hour
-                .ToList();
+            ordersToCleanup = [.. _orders.Where(o => DateTime.Now - o.OrderTime > TimeSpan.FromMinutes(5))];
         }
 
         // Remove old orders using shared lock
-        if (ordersToCleanup.Any())
+        if (ordersToCleanup.Count != 0)
         {
             lock (CollectionLocks.OrdersLock)
             {
                 foreach (var order in ordersToCleanup)
                 {
-                    if (_orders.Contains(order)) // Double-check order still exists
-                    {
-                        _orders.Remove(order);
-                        Console.WriteLine($"🗑️ Cleaned up old order: {order.OrderId}");
-                    }
+                    _orders.Remove(order);
                 }
             }
         }
@@ -69,6 +70,15 @@ public class DeliveryCompletionService : BackgroundService
         CleanupDriverAssignments();
     }
 
+    /// <summary>
+    /// Removes orphaned order assignments from delivery drivers when the referenced orders no longer exist.
+    /// Ensures data consistency by cleaning up driver assignments that point to removed orders.
+    /// </summary>
+    /// <remarks>
+    /// Uses shared locks to safely access both orders and drivers collections.
+    /// Logs cleanup actions to the console for debugging and monitoring purposes.
+    /// Maintains driver assignment lists by removing references to non-existent orders.
+    /// </remarks>
     private void CleanupDriverAssignments()
     {
         HashSet<string> validOrderIds;
@@ -76,7 +86,7 @@ public class DeliveryCompletionService : BackgroundService
         // Get current valid order IDs using shared lock
         lock (CollectionLocks.OrdersLock)
         {
-            validOrderIds = _orders.Select(o => o.OrderId).ToHashSet();
+            validOrderIds = [.. _orders.Select(o => o.OrderId)];
         }
 
         // Clean up driver assignments using shared lock
