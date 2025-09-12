@@ -28,14 +28,9 @@ internal class AutoPatchCollectionTrackerService(
     public Task StartAsync(CancellationToken cancellationToken)
     {
         using var scope = serviceProvider.CreateScope();
-        var objectTrackers = scope.ServiceProvider.GetServices<IObjectTracker>().ToArray();
-        logger.LogInformation("Starting AutoPatchCollectionTrackerService with {Count} trackers", objectTrackers.Length);
-        foreach (var tracker in objectTrackers)
-        {
-            logger.LogInformation("Starting tracker for collection of type {Type}", tracker.TrackedCollection.GetType().FullName);
-            tracker.StartTracking();
-        }
-        logger.LogInformation("AutoPatchCollectionTrackerService started");
+        var collectionManager = scope.ServiceProvider.GetRequiredService<ITrackedCollectionManager>();
+        logger.LogInformation("Starting AutoPatchCollectionTrackerService with dynamic collection management");
+        logger.LogInformation("AutoPatchCollectionTrackerService started - collections will be created on demand");
         return Task.CompletedTask;
     }
 
@@ -47,15 +42,23 @@ internal class AutoPatchCollectionTrackerService(
     public Task StopAsync(CancellationToken cancellationToken)
     {
         using var scope = serviceProvider.CreateScope();
-        var objectTrackers = scope.ServiceProvider.GetServices<IObjectTracker>().ToArray();
-        logger.LogInformation("Stopping AutoPatchCollectionTrackerService with {Count} trackers", objectTrackers.Length);
-        foreach (var tracker in objectTrackers)
+        var collectionManager = scope.ServiceProvider.GetRequiredService<ITrackedCollectionManager>();
+        var trackers = collectionManager.GetAllTrackers().ToArray();
+        logger.LogInformation("Stopping AutoPatchCollectionTrackerService with {Count} active trackers", trackers.Length);
+        
+        foreach (var tracker in trackers)
         {
-            logger.LogInformation("Stopping tracker for collection of type {Type}", tracker.TrackedCollection.GetType().FullName);
+            logger.LogInformation("Stopping tracker for collection of type {Type} with key '{Key}'", 
+                tracker.TypeName, tracker.Key ?? "default");
             tracker.StopTracking();
+            
+            if (tracker is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
         }
+        
         logger.LogInformation("AutoPatchCollectionTrackerService stopped");
         return Task.CompletedTask;
     }
 }
-

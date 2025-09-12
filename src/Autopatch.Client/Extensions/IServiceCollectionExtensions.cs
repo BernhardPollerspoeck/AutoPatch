@@ -32,9 +32,13 @@ public static class IServiceCollectionExtensions
     /// <typeparam name="TItem">The type of items in the collection.</typeparam>
     /// <param name="services">The service collection to add the tracked collection to.</param>
     /// <returns>The service collection for method chaining.</returns>
+    /// <remarks>
+    /// This method creates a new observable collection instance for each registration.
+    /// Multiple collections of the same type are supported through the AutoPatch client's key-based subscription system.
+    /// </remarks>
     public static IServiceCollection AddTrackedCollection<TItem>(this IServiceCollection services)
     {
-        services.AddSingleton<ObservableCollection<TItem>>();
+        services.AddTransient<ObservableCollection<TItem>>();
 
         return services;
     }

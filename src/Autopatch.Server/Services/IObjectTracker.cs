@@ -18,6 +18,18 @@ public interface IObjectTracker
     string TypeName { get; }
 
     /// <summary>
+    /// Gets the key that identifies this specific collection instance.
+    /// </summary>
+    /// <value>A string representing the key for this collection, or null for the default collection.</value>
+    string? Key { get; }
+
+    /// <summary>
+    /// Gets the subscription key used for SignalR groups and client subscriptions.
+    /// </summary>
+    /// <returns>The subscription key in format "TypeName" or "TypeName/Key".</returns>
+    string GetSubscriptionKey() => string.IsNullOrEmpty(Key) ? TypeName : $"{TypeName}/{Key}";
+
+    /// <summary>
     /// Gets the collection that is being tracked for changes.
     /// </summary>
     /// <value>An <see cref="INotifyCollectionChanged"/> collection that notifies when items are added, removed, or modified.</value>

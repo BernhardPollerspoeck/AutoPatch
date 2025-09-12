@@ -14,67 +14,55 @@ AutoPatch Framework enables automatic, transparent real-time synchronization of 
 - 🔄 **Automatic Real-time Sync** - Objects stay synchronized without manual intervention
 - 🚀 **Performance Optimized** - Intelligent throttling and batching system
 - 📱 **UI Integration** - Seamless data binding via INotifyPropertyChanged
-- 🔀 **Bidirectional Sync** - Optional client-to-server change propagation
 - 🛡️ **Type Safety** - Strongly typed API with compile-time validation
 - 🎯 **Minimal API** - Just Subscribe/Unsubscribe - everything else is automatic
 - 📦 **JsonPatch Based** - Efficient delta updates, only changes are transmitted
 - 🔌 **SignalR Powered** - Built on proven real-time communication infrastructure
+- 🔑 **Multiple Collections** - Support for multiple keyed collections of the same type
+- 🔐 **Subscription Validation** - Per-collection authentication and authorization control
 
 ## 🎯 Use Cases
 
-- **Live Dashboards** - Sensor data, alarm systems, monitoring
-- **Real-time Tracking** - People, vehicles, devices, assets
-- **Status Monitoring** - System health, process states, notifications
-- **Live Feeds** - Events, alerts, collaborative editing
-- **IoT Applications** - Device states, telemetry, control systems
+Live Dashboards • Real-time Tracking • Status Monitoring • Live Feeds • IoT Applications • Multi-tenant Systems
 
 ## 🚀 Quick Start
 
 ### Installation
 
 ```bash
-# Server
-dotnet add package AutoPatch.Server
-
-# Client  
-dotnet add package AutoPatch.Client
+dotnet add package AutoPatch.Server  # Server
+dotnet add package AutoPatch.Client  # Client
 ```
 
 ### Server Setup
 
 ```csharp
-// Program.cs or Startup.cs
-services.AddSignalR()
-    .AddAutoPatch();
+// Program.cs
+var builder = WebApplication.CreateBuilder(args);
 
-services.AddAutoPatch(options => 
-{
-    options.DefaultThrottleInterval = TimeSpan.FromMilliseconds(100);
-    options.MaxBatchSize = 50;
-})
-.AddObjectType<SensorData>(config => 
-{
-    config.KeyProperty = x => x.Id;
-    config.ThrottleInterval = TimeSpan.FromMilliseconds(50);
-});
+builder.Services
+    .AddAutoPatch(cfg => cfg.DefaultThrottleInterval = TimeSpan.FromMilliseconds(500))
+    .AddTrackedCollection<Order>()
+    .AddSignalR();
 
-// In your controller or service
-public class SensorService
+var app = builder.Build();
+app.UseAutoPatch();
+app.Run();
+
+// Use tracked collections
+public class OrderService
 {
-    private readonly IAutoPatchService _autoPatch;
-    
-    public SensorService(IAutoPatchService autoPatch)
+    private readonly ObservableCollection<Order> _orders;
+
+    public OrderService(ITrackedCollectionManager manager)
     {
-        _autoPatch = autoPatch;
+        _orders = manager.GetOrCreateCollection<Order>();
     }
-    
-    public void UpdateSensor(SensorData sensor)
+
+    public void ProcessOrder(Order order)
     {
-        // Update your data store
-        await _repository.UpdateAsync(sensor);
-        
-        // Notify all connected clients - that's it!
-        _autoPatch.NotifyChanged(sensor);
+        _orders.Add(order);              // → Auto-sync to clients
+        order.Status = "Processing";     // → Auto-sync property changes
     }
 }
 ```
@@ -82,304 +70,74 @@ public class SensorService
 ### Client Setup
 
 ```csharp
-// Registration
-services.AddAutoPatch()
-    .AddObjectType<SensorData>(config => 
-    {
-        config.KeyProperty = x => x.Id;
-    });
+// App setup
+services.AddAutoPatch(cfg => cfg.Endpoint = "http://localhost:5249")
+        .AddTrackedCollection<Order>();
 
 // Usage
-public class SensorViewModel
+public class OrderViewModel
 {
-    private readonly IAutoPatchClient _client;
-    public ObservableCollection<SensorData> Sensors { get; } = new();
-    
-    public async Task StartAsync()
+    public ObservableCollection<Order> Orders { get; private set; } = [];
+
+    public async Task InitializeAsync()
     {
-        await _client.StartAsync();
-        
-        // Subscribe and get initial data + live updates
-        var result = await _client.SubscribeAsync<SensorData>(Sensors);
-        
-        // Sensors collection now contains all current data
-        // and will automatically update when server changes occur
+        await _client.SubscribeToTypeAsync<Order>();
+        Orders = _client.GetTrackedCollection<Order>(); // Auto-updating collection
     }
 }
 ```
 
-### That's it! 🎉
+## 📖 Advanced Features
 
-Your `Sensors` collection will now automatically stay in sync with the server. No manual update code needed.
-
-## 📦 NuGet Packages
-
-The AutoPatch Framework is available as three separate NuGet packages:
-
-| Package | Description | Target Frameworks |
-|---------|-------------|-------------------|
-| [AutoPatch.Core](https://www.nuget.org/packages/AutoPatch.Core/) | Core models and interfaces shared between client and server | .NET Standard 2.1 |
-| [AutoPatch.Server](https://www.nuget.org/packages/AutoPatch.Server/) | Server-side implementation with SignalR Hub | .NET 9.0 |
-| [AutoPatch.Client](https://www.nuget.org/packages/AutoPatch.Client/) | Client-side implementation with subscription management | .NET 9.0 |
-
-### Versioning Strategy
-
-We follow semantic versioning with a three-part version number:
-
-- **9.0.1** - Initial version for .NET 9
-- **9.0.2** - Bug fixes (third number increments)
-- **9.1.1** - New features (second number increments)
-- **10.0.1** - Major version upgrade (.NET version change)
-
-## 📖 Documentation
-
-### Server Configuration
-
-#### Object Type Registration
+### Multiple Collections & Authentication
 
 ```csharp
-services.AddAutoPatch()
-    .AddObjectType<SensorData>(config => 
-    {
-        config.KeyProperty = x => x.Id;                    // Required: Unique identifier
-        config.ExcludeProperties = new[] { "InternalId" }; // Optional: Properties to ignore
-        config.ClientChangePolicy = ClientChangePolicy.Auto; // Client edit permissions
-        config.ThrottleInterval = TimeSpan.FromMilliseconds(50); // Update frequency
-    });
-```
+// Server: Collection per tenant
+var tenantOrders = manager.GetOrCreateCollection<Order>($"tenant_{tenantId}");
 
-#### Client Change Policies
+// Client: Subscribe with auth
+await client.SubscribeToTypeAsync<Order>("tenant_123", "auth_token");
+var orders = client.GetTrackedCollection<Order>("tenant_123");
 
-- **`Auto`** - Client changes are immediately applied and broadcast
-- **`RequireConfirmation`** - Server validates client changes before applying
-- **`Reject`** - Read-only mode, client changes are rejected
-
-#### Throttling System
-
-AutoPatch includes an intelligent throttling system that batches high-frequency updates:
-
-```csharp
-// High-frequency updates are automatically batched
-0ms:  sensor.Temperature = 25    // → Queued
-10ms: sensor.Humidity = 80       // → Queued  
-30ms: sensor.Status = "Alert"    // → Queued
-50ms: Timer expires → All changes sent as single batch
-```
-
-#### Usage Examples
-
-```csharp
-// Single operations
-_autoPatch.NotifyChanged(sensor);
-_autoPatch.NotifyDeleted<SensorData>(sensorId);
-_autoPatch.NotifyAdded(newSensor);
-
-// Bulk operations
-_autoPatch.NotifyChanged(sensors);        // IEnumerable<T>
-_autoPatch.NotifyDeleted<SensorData>(ids); // IEnumerable<TKey>
-
-// Batch operations (mixed)
-_autoPatch.NotifyBatch(batch => 
+// Validator
+public class OrderValidator : ICollectionSubscriptionValidator<Order>
 {
-    batch.Changed(sensors);
-    batch.Deleted<SensorData>(sensorIds);
-    batch.Added(newSensors);
+    public bool ValidateSubscription(string? auth, string key) => auth == "valid_token";
+}
+builder.Services.AddTrackedCollection<Order, OrderValidator>();
+```
+
+### Configuration Options
+
+```csharp
+builder.Services.AddTrackedCollection<Order>(cfg =>
+{
+    cfg.ThrottleInterval = TimeSpan.FromMilliseconds(100);  // Update frequency
+    cfg.ExcludedProperties = ["InternalData"];              // Skip properties
+    cfg.ClientChangePolicy = ClientChangePolicy.Reject;    // Read-only
 });
 ```
 
-### Client Configuration
+## 🏗️ How It Works
 
-#### Connection Management
-
-```csharp
-IAutoPatchClient client = serviceProvider.GetService<IAutoPatchClient>();
-
-// Manual connection management
-await client.StartAsync(cancellationToken);
-await client.StopAsync(cancellationToken);
-
-// Or use hosted service (not available in .NET MAUI)
-services.AddAutoPatch()
-    .AddHostedService(); // Starts automatically with the app
-```
-
-#### Subscription with Policy Information
-
-```csharp
-var sensors = new ObservableCollection<SensorData>();
-var result = await client.SubscribeAsync<SensorData>(sensors);
-
-// Adapt UI based on server policy
-if (result.CanEdit)
-{
-    editButton.IsEnabled = true;
-}
-else
-{
-    editButton.IsEnabled = false;
-    statusLabel.Text = "Read-only mode";
-}
-
-// Or check specific policy
-switch (result.ClientChangePolicy)
-{
-    case ClientChangePolicy.Auto:
-        ShowInstantEditingUI();
-        break;
-    case ClientChangePolicy.RequireConfirmation:
-        ShowConfirmationEditingUI();
-        break;
-    case ClientChangePolicy.Reject:
-        ShowReadOnlyUI();
-        break;
-}
-```
-
-#### Error Handling
-
-```csharp
-client.OnError += (exception) => HandleError(exception);
-client.OnConnectionLost += () => ShowOfflineMode();
-client.OnReconnected += () => 
-{
-    HideOfflineMode();
-    // All subscriptions are automatically reactivated
-};
-```
-
-### Bidirectional Sync (Optional)
-
-Enable client-to-server synchronization with automatic change tracking:
-
-```csharp
-services.AddAutoPatch()
-    .AddObjectType<SensorData>(config => 
-    {
-        config.KeyProperty = x => x.Id;
-        config.ChangeTracking = ChangeTrackingMode.AutoCommit; // or ManualCommit
-    });
-```
-
-**Change Tracking Modes:**
-- **`Disabled`** - No client change tracking (default)
-- **`ManualCommit`** - Automatic tracking, manual `CommitChanges()` required
-- **`AutoCommit`** - Automatic tracking + immediate commit on changes
-
-## 🏗️ Architecture
-
-### How It Works
-
-1. **Server-driven Updates**: Server is the single source of truth
-2. **Automatic Patching**: JsonPatch updates local objects transparently  
-3. **UI Integration**: INotifyPropertyChanged triggers automatic UI updates
-4. **Intelligent Throttling**: Batch-queue system optimizes performance
-5. **Bidirectional Sync**: Optional client changes flow back to server
-
-### Data Flow
-
-```
-Server Change → Queue → Throttle → JsonPatch → SignalR → Client → Apply → UI Update
-     ↓             ↓        ↓          ↓         ↓        ↓       ↓      ↓
-NotifyChanged → Batch → Timer → Serialize → Broadcast → Patch → Object → PropertyChanged
-```
-
-### Performance Features
-
-- **Bandwidth Efficient**: Only deltas transmitted via JsonPatch
-- **Batched Updates**: High-frequency changes are automatically batched
-- **Configurable Throttling**: Per-type throttle intervals
-- **SignalR Scaling**: Leverages SignalR's proven infrastructure
-- **Memory Optimized**: Intelligent queue management prevents memory issues
-
-## 🔧 Advanced Configuration
-
-### Custom Change Handlers
-
-```csharp
-public class SensorChangeHandler : IChangeHandler<SensorData>
-{
-    public async Task<bool> ValidateAsync(SensorData item, ChangeContext context)
-    {
-        // Custom validation logic
-        return item.Temperature >= -50 && item.Temperature <= 100;
-    }
-    
-    public async Task ApplyAsync(SensorData item, ChangeContext context)
-    {
-        // Custom application logic
-        await _repository.SaveAsync(item);
-    }
-}
-
-// Register handler
-services.AddAutoPatch()
-    .AddChangeHandler<SensorData, SensorChangeHandler>();
-```
-
-### Per-Type Throttling
-
-```csharp
-services.AddAutoPatch()
-    .AddObjectType<FastSensor>(config => 
-    {
-        config.ThrottleInterval = TimeSpan.FromMilliseconds(50);  // Fast updates
-    })
-    .AddObjectType<SlowSensor>(config =>
-    {
-        config.ThrottleInterval = TimeSpan.FromMilliseconds(500); // Slower updates  
-    })
-    .AddObjectType<CriticalAlert>(config =>
-    {
-        config.ThrottleInterval = TimeSpan.Zero; // No throttling - immediate
-    });
-```
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)  
-5. Open a Pull Request
-
-### Building Locally
-
-To build the project locally:
-
-```bash
-dotnet restore
-dotnet build
-dotnet test
-```
-
-To create NuGet packages:
-
-```bash
-dotnet pack -c Release
-```
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- 📖 [Documentation](https://github.com/BernhardPollerspoeck/AutoPatch/wiki)
-- 🐛 [Issue Tracker](https://github.com/BernhardPollerspoeck/AutoPatch/issues)
-- 💬 [Discussions](https://github.com/BernhardPollerspoeck/AutoPatch/discussions)
-- 📧 [Email Support](mailto:bernhard@pollerspoeck.at)
+**Server**: `ObservableCollection<T>` changes → JsonPatch → SignalR broadcast  
+**Client**: Receive patches → Apply to local `ObservableCollection<T>` → UI updates
 
 ## 🌟 Roadmap
 
-- [ ] Filtering support for subscriptions
-- [ ] Conditional updates
-- [ ] Offline support with sync on reconnect
-- [ ] Custom serialization options
-- [ ] Conflict resolution strategies  
-- [ ] Priority-based throttling
-- [ ] Adaptive throttling based on network conditions
+- [ ] **Bidirectional Sync** - Client-to-server change propagation
+- [ ] **Change Policies** - Auto/RequireConfirmation/Reject modes  
+- [ ] **Filtering** - Subscription filters and conditional updates
+- [ ] **Offline Support** - Sync on reconnect
+
+## 🆘 Support & Community
+
+Got questions? We're here to help!
+
+🐛 **[Report Issues](https://github.com/BernhardPollerspoeck/AutoPatch/issues)** - Found a bug or have a feature request?  
+💬 **[Join Discussions](https://github.com/BernhardPollerspoeck/AutoPatch/discussions)** - Ask questions, share ideas, or showcase your projects  
+📧 **[Direct Contact](mailto:bernhard@pollerspoeck.at)** - Need enterprise support or consulting?  
+⭐ **[Star the Project](https://github.com/BernhardPollerspoeck/AutoPatch)** - Show your support and stay updated!
 
 ---
 

@@ -31,7 +31,7 @@ public partial class OrdersViewModel : ObservableObject
     {
         try
         {
-            await _autoPatchClient.SubscribeToTypeAsync<PizzaOrder>();
+            await _autoPatchClient.SubscribeToTypeAsync<PizzaOrder>(null, "admin");
             this.Orders = _autoPatchClient.GetTrackedCollection<PizzaOrder>();
         }
         catch (Exception ex)
