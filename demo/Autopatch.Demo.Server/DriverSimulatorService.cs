@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Autopatch.Demo.Shared;
+using Autopatch.Server.Services;
 
 namespace Autopatch.Demo.Server;
 
@@ -8,10 +9,10 @@ namespace Autopatch.Demo.Server;
 /// Handles the complete driver lifecycle and position updates for live tracking.
 /// Thread-safe operations using shared locks to prevent conflicts with other services.
 /// </summary>
-public class DriverSimulatorService(
-    ObservableCollection<DeliveryDriver> drivers,
-    ObservableCollection<PizzaOrder> orders) : BackgroundService
+public class DriverSimulatorService(ITrackedCollectionManager collectionManager) : BackgroundService
 {
+    private readonly ObservableCollection<DeliveryDriver> _drivers = collectionManager.GetOrCreateCollection<DeliveryDriver>();
+    private readonly ObservableCollection<PizzaOrder> _orders = collectionManager.GetOrCreateCollection<PizzaOrder>();
     private readonly Random _random = new();
     private DateTime _lastUpdate = DateTime.UtcNow;
 
@@ -49,7 +50,7 @@ public class DriverSimulatorService(
     {
         lock (CollectionLocks.DriversLock)
         {
-            for (int i = 0; i < 5; i++)
+            for (var i = 0; i < 5; i++)
             {
                 var driver = new DeliveryDriver
                 {
@@ -62,7 +63,7 @@ public class DriverSimulatorService(
                     AssignedOrders = []
                 };
 
-                drivers.Add(driver);
+                _drivers.Add(driver);
                 Console.WriteLine($"🚗 Driver {driver.Name} ({driver.DriverId}) is now online");
             }
         }
@@ -76,15 +77,14 @@ public class DriverSimulatorService(
         // Create thread-safe snapshots of collections using shared locks
         lock (CollectionLocks.OrdersLock)
         {
-            readyOrders = orders
+            readyOrders = [.. _orders
                 .Where(o => o.Status == OrderStatus.Ready && string.IsNullOrEmpty(o.AssignedDriverId))
-                .OrderBy(o => o.OrderTime)
-                .ToList();
+                .OrderBy(o => o.OrderTime)];
         }
 
         lock (CollectionLocks.DriversLock)
         {
-            availableDrivers = [.. drivers.Where(d => d.Status == DriverStatus.Available && d.AssignedOrders.Count < 2)];
+            availableDrivers = [.. _drivers.Where(d => d.Status == DriverStatus.Available && d.AssignedOrders.Count < 2)];
         }
         Random.Shared.Shuffle(availableDrivers);
 
@@ -142,7 +142,7 @@ public class DriverSimulatorService(
         // Create thread-safe snapshot using shared lock
         lock (CollectionLocks.DriversLock)
         {
-            driversSnapshot = [.. drivers];
+            driversSnapshot = [.. _drivers];
         }
 
         // Process movements outside of lock
@@ -157,7 +157,7 @@ public class DriverSimulatorService(
         lock (CollectionLocks.DriversLock)
         {
             // Verify driver is still in collection and get current status
-            var currentDriver = drivers.FirstOrDefault(d => d.DriverId == driver.DriverId);
+            var currentDriver = _drivers.FirstOrDefault(d => d.DriverId == driver.DriverId);
             if (currentDriver == null) return; // Driver was removed
 
             switch (currentDriver.Status)
@@ -185,7 +185,7 @@ public class DriverSimulatorService(
                         {
                             foreach (var orderId in currentDriver.AssignedOrders)
                             {
-                                var order = orders.FirstOrDefault(o => o.OrderId == orderId);
+                                var order = _orders.FirstOrDefault(o => o.OrderId == orderId);
                                 if (order != null)
                                 {
                                     // Mark order as delivered

@@ -12,7 +12,7 @@ builder.Services
         cfg.DefaultThrottleInterval = TimeSpan.FromMilliseconds(500); // Balanced for demo
         cfg.MaxBatchSize = 50;
     })
-    .AddTrackedCollection<PizzaOrder>(cfg =>
+    .AddTrackedCollection<PizzaOrder, PizzaOrderValidator>(cfg =>
     {
         cfg.ClientChangePolicy = ClientChangePolicy.Reject; // Read-only for demo
         cfg.ThrottleInterval = TimeSpan.FromMilliseconds(300);

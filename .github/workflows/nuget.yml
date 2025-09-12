@@ -3,19 +3,7 @@ name: Build, Test, and Publish NuGet Packages
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
-    inputs:
-      increment_version:
-        description: "Version increment type"
-        type: choice
-        options:
-          - none
-          - patch
-          - minor
-          - major
-        default: "none"
+
 
 jobs:
   build-and-test:
