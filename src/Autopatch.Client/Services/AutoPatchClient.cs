@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Text.Json;
 using Autopatch.Client.Models;
 using Microsoft.AspNetCore.JsonPatch.Adapters;
@@ -374,13 +375,13 @@ public class AutoPatchClient(
         }
 
         var endpoints = await serviceEndpointResolver.GetEndpointsAsync(config.ServiceName!, cancellationToken);
-        var endpoint = endpoints.FirstOrDefault();
         
-        if (endpoint == null)
+        if (!endpoints.Endpoints.Any())
         {
             throw new InvalidOperationException($"No endpoints found for service '{config.ServiceName}'.");
         }
 
-        return endpoint.ToString();
+        var endpoint = endpoints.Endpoints.First();
+        return $"{endpoint.EndPoint}";
     }
 }

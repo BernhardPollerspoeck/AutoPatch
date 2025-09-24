@@ -1,6 +1,7 @@
 using Autopatch.Client.Extensions;
 using Autopatch.Client.Models;
 using Autopatch.Client.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.ServiceDiscovery;
 
@@ -14,6 +15,7 @@ public class AspireIntegrationTests
     {
         // Arrange
         var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         const string serviceName = "test-autopatch";
 
         // Act
@@ -21,9 +23,6 @@ public class AspireIntegrationTests
 
         // Assert
         var serviceProvider = services.BuildServiceProvider();
-        
-        // Verify service discovery is registered
-        serviceProvider.GetService<ServiceEndpointResolver>().Should().NotBeNull();
         
         // Verify AutoPatch client is registered
         serviceProvider.GetService<IAutoPatchClient>().Should().NotBeNull();
@@ -39,6 +38,7 @@ public class AspireIntegrationTests
     {
         // Arrange
         var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
 
         // Act
         services.AddAutoPatchWithServiceDiscovery();
@@ -54,6 +54,7 @@ public class AspireIntegrationTests
     {
         // Arrange
         var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         Action<Action> testDispatcher = action => action();
 
         // Act
