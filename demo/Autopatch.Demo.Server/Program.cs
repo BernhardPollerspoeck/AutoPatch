@@ -5,10 +5,7 @@ using Autopatch.Server.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add Aspire service defaults for service discovery
-builder.AddServiceDefaults();
-
-// Configure AutoPatch with Aspire support
+// Configure AutoPatch with Aspire support (service discovery available if configured)
 builder.Services
     .AddAutoPatchWithAspire(cfg =>
     {
@@ -37,11 +34,10 @@ builder.Services.AddHostedService<DeliveryCompletionService>();
 
 var app = builder.Build();
 
-app.MapDefaultEndpoints();
 app.UseAutoPatch();
 
 Console.WriteLine("🍕 Poller's Pizza Palace Demo Server starting...");
 Console.WriteLine("📊 AutoPatch Framework Demo - Live Order & Driver Tracking");
-Console.WriteLine("🔍 Now discoverable via .NET Aspire service discovery!");
+Console.WriteLine("🔍 Ready for .NET Aspire service discovery (configure as needed)!");
 
 app.Run();

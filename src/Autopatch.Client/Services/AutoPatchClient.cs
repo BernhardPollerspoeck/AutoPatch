@@ -105,7 +105,7 @@ public class AutoPatchClient(
         _connection.On<string, Operation[], bool>(methodName, HandleAutoPatchItem);
 
         var result = await _connection.InvokeAsync<bool>("SubscribeToType", typeof(T).Name, key, authString, cancellationToken);
-        
+
         // If subscription was rejected, clean up local subscription
         if (!result && _subscriptions.TryGetValue(methodName, out var failedSubscription))
         {
@@ -116,7 +116,7 @@ public class AutoPatchClient(
                 _connection.Remove(methodName);
             }
         }
-        
+
         return result;
     }
 
@@ -133,7 +133,7 @@ public class AutoPatchClient(
     {
         var subscriptionKey = GetSubscriptionKey<T>(key);
         var methodName = $"AutoPatch/{subscriptionKey}";
-        
+
         if (_subscriptions.TryGetValue(methodName, out var subscription))
         {
             subscription.Subscribers--;
@@ -160,7 +160,7 @@ public class AutoPatchClient(
     {
         var subscriptionKey = GetSubscriptionKey<T>(key);
         var methodName = $"AutoPatch/{subscriptionKey}";
-        
+
         return _subscriptions.TryGetValue(methodName, out var subscription)
             ? (ObservableCollection<T>)subscription.TrackedCollection
             : throw new InvalidOperationException($"Type {typeof(T).Name} with key '{key ?? "default"}' is not subscribed.");
@@ -348,7 +348,7 @@ public class AutoPatchClient(
     private async Task<string> ResolveEndpointAsync(CancellationToken cancellationToken = default)
     {
         var config = options.Value;
-        
+
         // Validate configuration
         if (string.IsNullOrEmpty(config.Endpoint) && string.IsNullOrEmpty(config.ServiceName))
         {
@@ -375,7 +375,7 @@ public class AutoPatchClient(
         }
 
         var endpoints = await serviceEndpointResolver.GetEndpointsAsync(config.ServiceName!, cancellationToken);
-        
+
         if (!endpoints.Endpoints.Any())
         {
             throw new InvalidOperationException($"No endpoints found for service '{config.ServiceName}'.");

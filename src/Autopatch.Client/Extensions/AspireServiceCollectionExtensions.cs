@@ -21,7 +21,7 @@ public static class AspireServiceCollectionExtensions
     /// to discover the server through .NET Aspire's service discovery mechanism.
     /// </remarks>    
     public static IServiceCollection AddAutoPatchWithServiceDiscovery(
-        this IServiceCollection services, 
+        this IServiceCollection services,
         string serviceName,
         Action<AutoPatchConfiguration>? configureClient = null)
     {

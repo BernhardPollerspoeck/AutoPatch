@@ -86,7 +86,7 @@ public static class IServiceCollectionExtensions
 
         // Register factory for creating trackers at runtime
         services.AddSingleton<ITrackedCollectionFactory<TItem>, TrackedCollectionFactory<TItem>>();
-        
+
         // Register the validator
         services.AddScoped<ICollectionSubscriptionValidator<TItem>, TValidator>();
 

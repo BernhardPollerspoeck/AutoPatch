@@ -11,7 +11,7 @@ namespace Autopatch.Client.Services;
 /// <param name="autoPatchClient">The Autopatch client instance to manage connections for.</param>
 /// <param name="logger">Logger for connection management operations.</param>
 public class AutopatchConnectionManager(
-    IAutoPatchClient autoPatchClient, 
+    IAutoPatchClient autoPatchClient,
     ILogger<AutopatchConnectionManager> logger) : IHostedService
 {
     private readonly CancellationTokenSource _cancellationTokenSource = new();
@@ -36,7 +36,7 @@ public class AutopatchConnectionManager(
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _cancellationTokenSource.Cancel();
-        
+
         try
         {
             await autoPatchClient.DisconnectAsync(cancellationToken);
@@ -45,7 +45,7 @@ public class AutopatchConnectionManager(
         {
             logger.LogWarning(ex, "Error during disconnect");
         }
-        
+
         _cancellationTokenSource.Dispose();
     }
 
@@ -66,11 +66,11 @@ public class AutopatchConnectionManager(
         {
             try
             {
-                logger.LogInformation("Attempting to connect to AutoPatch server (attempt {Attempt}/{MaxRetries})", 
+                logger.LogInformation("Attempting to connect to AutoPatch server (attempt {Attempt}/{MaxRetries})",
                     retryCount + 1, maxRetries);
-                
+
                 await autoPatchClient.ConnectAsync(cancellationToken);
-                
+
                 logger.LogInformation("Successfully connected to AutoPatch server");
                 return;
             }
@@ -78,10 +78,10 @@ public class AutopatchConnectionManager(
             {
                 retryCount++;
                 var delay = TimeSpan.FromMilliseconds(baseDelay.TotalMilliseconds * Math.Pow(2, retryCount - 1));
-                
-                logger.LogWarning(ex, "Failed to connect to AutoPatch server. Retrying in {Delay}ms (attempt {Attempt}/{MaxRetries})", 
+
+                logger.LogWarning(ex, "Failed to connect to AutoPatch server. Retrying in {Delay}ms (attempt {Attempt}/{MaxRetries})",
                     delay.TotalMilliseconds, retryCount, maxRetries);
-                
+
                 await Task.Delay(delay, cancellationToken);
             }
             catch (Exception ex)

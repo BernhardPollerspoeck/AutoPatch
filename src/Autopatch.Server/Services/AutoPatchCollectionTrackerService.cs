@@ -45,19 +45,19 @@ internal class AutoPatchCollectionTrackerService(
         var collectionManager = scope.ServiceProvider.GetRequiredService<ITrackedCollectionManager>();
         var trackers = collectionManager.GetAllTrackers().ToArray();
         logger.LogInformation("Stopping AutoPatchCollectionTrackerService with {Count} active trackers", trackers.Length);
-        
+
         foreach (var tracker in trackers)
         {
-            logger.LogInformation("Stopping tracker for collection of type {Type} with key '{Key}'", 
+            logger.LogInformation("Stopping tracker for collection of type {Type} with key '{Key}'",
                 tracker.TypeName, tracker.Key ?? "default");
             tracker.StopTracking();
-            
+
             if (tracker is IDisposable disposable)
             {
                 disposable.Dispose();
             }
         }
-        
+
         logger.LogInformation("AutoPatchCollectionTrackerService stopped");
         return Task.CompletedTask;
     }
