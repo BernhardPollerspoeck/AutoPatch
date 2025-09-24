@@ -87,6 +87,51 @@ public class OrderViewModel
 }
 ```
 
+## 🌟 .NET Aspire Integration
+
+AutoPatch seamlessly integrates with .NET Aspire for service discovery, eliminating the need for hardcoded URLs.
+
+### Aspire Server Setup
+
+```csharp
+// Program.cs
+var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults(); // Aspire service defaults
+
+builder.Services
+    .AddAutoPatchWithAspire(cfg => cfg.DefaultThrottleInterval = TimeSpan.FromMilliseconds(500))
+    .AddTrackedCollection<Order>()
+    .AddSignalR();
+
+var app = builder.Build();
+app.MapDefaultEndpoints(); // Aspire endpoints
+app.UseAutoPatch();
+app.Run();
+```
+
+### Aspire Client Setup
+
+```csharp
+// Client with service discovery - no hardcoded URLs!
+builder.AddServiceDefaults();
+
+services.AddAutoPatchWithServiceDiscovery("autopatch") // Discover the "autopatch" service
+        .AddTrackedCollection<Order>();
+
+// Usage remains the same
+await client.SubscribeToTypeAsync<Order>();
+var orders = client.GetTrackedCollection<Order>();
+```
+
+### Benefits of Aspire Integration
+
+- 🔍 **Automatic Service Discovery** - No hardcoded URLs needed
+- 🌍 **Environment Agnostic** - Works in dev, test, and production
+- 📊 **Built-in Observability** - Metrics, logging, and tracing
+- 🏥 **Health Monitoring** - Automatic health checks
+- ⚙️ **Centralized Configuration** - Manage settings through Aspire
+
 ## 📖 Advanced Features
 
 ### Multiple Collections & Authentication

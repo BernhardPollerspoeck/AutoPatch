@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.JsonPatch.Operations;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.ServiceDiscovery;
 using Newtonsoft.Json.Serialization;
 
 namespace Autopatch.Client.Services;
@@ -50,8 +51,9 @@ public class AutoPatchClient(
     /// <returns>A task that represents the asynchronous connection operation.</returns>
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
+        var endpoint = await ResolveEndpointAsync(cancellationToken);
         var builder = new HubConnectionBuilder()
-            .WithUrl($"{options.Value.Endpoint}/Autopatch");
+            .WithUrl($"{endpoint}/Autopatch");
 
         _connection = builder.Build();
         _connection.Closed += HandleConnectionClosed;
@@ -334,5 +336,51 @@ public class AutoPatchClient(
     {
         OnConnectionChanged?.Invoke(this, false);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Resolves the endpoint URL either from direct configuration or through service discovery.
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the resolution operation.</param>
+    /// <returns>The resolved endpoint URL.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when neither endpoint nor service name is configured, or both are configured.</exception>
+    private async Task<string> ResolveEndpointAsync(CancellationToken cancellationToken = default)
+    {
+        var config = options.Value;
+        
+        // Validate configuration
+        if (string.IsNullOrEmpty(config.Endpoint) && string.IsNullOrEmpty(config.ServiceName))
+        {
+            throw new InvalidOperationException("Either Endpoint or ServiceName must be configured.");
+        }
+
+        if (!string.IsNullOrEmpty(config.Endpoint) && !string.IsNullOrEmpty(config.ServiceName))
+        {
+            throw new InvalidOperationException("Endpoint and ServiceName are mutually exclusive. Configure only one.");
+        }
+
+        // Use direct endpoint if configured
+        if (!string.IsNullOrEmpty(config.Endpoint))
+        {
+            return config.Endpoint;
+        }
+
+        // Use service discovery if service name is configured
+        var serviceEndpointResolver = serviceProvider.GetService<ServiceEndpointResolver>();
+        if (serviceEndpointResolver == null)
+        {
+            throw new InvalidOperationException(
+                "Service discovery is not configured. Add service discovery to your service collection using AddServiceDiscovery().");
+        }
+
+        var endpoints = await serviceEndpointResolver.GetEndpointsAsync(config.ServiceName!, cancellationToken);
+        var endpoint = endpoints.FirstOrDefault();
+        
+        if (endpoint == null)
+        {
+            throw new InvalidOperationException($"No endpoints found for service '{config.ServiceName}'.");
+        }
+
+        return endpoint.ToString();
     }
 }
