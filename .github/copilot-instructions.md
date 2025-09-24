@@ -109,6 +109,14 @@ Always run through this complete validation scenario after making changes:
 
 ## Code Quality and CI Integration
 
+### Code Quality Standards
+- **Nullability**: Always respect nullability annotations and warnings
+  - Use nullable reference types appropriately (`string?` vs `string`)
+  - Handle null cases explicitly in code logic
+  - Follow project's nullable context settings
+- **Test-Driven Development**: Write tests before implementing features
+- **Clean Code**: Focus on readable, maintainable implementations
+
 ### Formatting and Linting
 - Run code formatting on individual projects (solution-level formatting has issues with .slnx files):
   ```bash
@@ -163,11 +171,21 @@ Always run through this complete validation scenario after making changes:
 
 ### Adding New Features
 1. Build and test existing code to establish baseline
-2. Make changes to appropriate library (Core/Server/Client)
-3. Update corresponding test project
-4. Run tests to verify functionality
-5. Test with demo applications for integration validation
-6. Run `dotnet format` before committing
+2. **WRITE UNIT TESTS FIRST**: Before changing any code, write unit tests in the appropriate test project to document current behavior
+3. Make changes to appropriate library (Core/Server/Client)
+4. **ALIGN TESTS WITH NEW BEHAVIOR**: Update tests to match new expected functionality
+5. Run tests to verify functionality
+6. Test with demo applications for integration validation
+7. Run `dotnet format` before committing
+
+### Unit Testing Guidelines
+- **Test Before Code Changes**: Always write tests to capture existing behavior before modifying code
+- **Focus on Logic**: Cover business logic and critical paths, avoid test spam
+- **Appropriate Test Projects**: 
+  - Core logic → `test/Autopatch.Core.Tests/`
+  - Server functionality → `test/Autopatch.Server.Tests/`
+  - Client functionality → `test/Autopatch.Client.Tests/`
+- **Test Structure**: Follow existing test patterns in the project
 
 ### Debugging Issues
 1. Use demo server/client to reproduce issues
@@ -188,3 +206,5 @@ Always run through this complete validation scenario after making changes:
 - Demo server must be running before starting demo clients
 - All timeouts should be 30+ seconds to account for .NET 9.0 SDK download/setup time
 - The project builds successfully and all tests pass - if they don't, check .NET SDK version first
+- **NULLABILITY**: Always respect nullable reference types and handle null cases explicitly
+- **TESTING FIRST**: Write unit tests before making code changes to capture existing behavior
