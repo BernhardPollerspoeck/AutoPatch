@@ -1,0 +1,52 @@
+{
+  "name": "@autopatch/client",
+  "version": "1.0.0",
+  "description": "JavaScript/TypeScript client for AutoPatch real-time synchronization framework",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "prepare": "npm run clean && npm run build",
+    "example:react": "cd examples/react-demo && npm start"
+  },
+  "keywords": [
+    "autopatch",
+    "signalr",
+    "real-time",
+    "synchronization",
+    "json-patch",
+    "typescript",
+    "javascript"
+  ],
+  "author": "AutoPatch Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "@microsoft/signalr": "^8.0.0",
+    "fast-json-patch": "^3.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "typescript": "^5.0.0",
+    "rimraf": "^5.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BernhardPollerspoeck/AutoPatch.git",
+    "directory": "clients/js-ts"
+  },
+  "bugs": {
+    "url": "https://github.com/BernhardPollerspoeck/AutoPatch/issues"
+  },
+  "homepage": "https://github.com/BernhardPollerspoeck/AutoPatch#readme"
+}
