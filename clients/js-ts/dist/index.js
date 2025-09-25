@@ -21,7 +21,7 @@
  * ```
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.VERSION = exports.PatchUtils = exports.createReactHook = exports.DriverStatus = exports.OrderStatus = exports.ConnectionStatus = exports.AutoPatchClient = void 0;
+exports.VERSION = exports.useAutoPatchCollection = exports.useAutoPatch = exports.createReactHook = exports.PatchUtils = exports.DriverStatus = exports.OrderStatus = exports.ConnectionStatus = exports.AutoPatchClient = void 0;
 // Main client exports
 var AutoPatchClient_1 = require("./AutoPatchClient");
 Object.defineProperty(exports, "AutoPatchClient", { enumerable: true, get: function () { return AutoPatchClient_1.AutoPatchClient; } });
@@ -31,10 +31,23 @@ Object.defineProperty(exports, "ConnectionStatus", { enumerable: true, get: func
 Object.defineProperty(exports, "OrderStatus", { enumerable: true, get: function () { return types_1.OrderStatus; } });
 Object.defineProperty(exports, "DriverStatus", { enumerable: true, get: function () { return types_1.DriverStatus; } });
 // Utilities
-var react_hook_1 = require("./utils/react-hook");
-Object.defineProperty(exports, "createReactHook", { enumerable: true, get: function () { return react_hook_1.createReactHook; } });
 var patch_utils_1 = require("./utils/patch-utils");
 Object.defineProperty(exports, "PatchUtils", { enumerable: true, get: function () { return patch_utils_1.PatchUtils; } });
+// React hooks (conditionally exported)
+let reactHookExports = {};
+try {
+    // Only export React hooks if React is available
+    const reactHooks = require('./utils/react-hook');
+    reactHookExports = {
+        createReactHook: reactHooks.createReactHook,
+        useAutoPatch: reactHooks.useAutoPatch,
+        useAutoPatchCollection: reactHooks.useAutoPatchCollection
+    };
+}
+catch (error) {
+    // React not available, skip React hook exports
+}
+exports.createReactHook = reactHookExports.createReactHook, exports.useAutoPatch = reactHookExports.useAutoPatch, exports.useAutoPatchCollection = reactHookExports.useAutoPatchCollection;
 // Version
 exports.VERSION = '1.0.0';
 //# sourceMappingURL=index.js.map

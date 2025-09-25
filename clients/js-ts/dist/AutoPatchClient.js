@@ -206,9 +206,25 @@ class AutoPatchClient {
             return;
         try {
             if (operations && operations.length > 0) {
+                // Clean operations by removing non-standard properties and ensuring valid structure
+                const cleanedOperations = operations.map(op => {
+                    const cleanOp = {
+                        op: op.op,
+                        path: op.path
+                    };
+                    // Add value if it exists (for add, replace, test operations)
+                    if ('value' in op && op.value !== undefined) {
+                        cleanOp.value = op.value;
+                    }
+                    // Add from if it exists (for move, copy operations)
+                    if ('from' in op && op.from !== undefined) {
+                        cleanOp.from = op.from;
+                    }
+                    return cleanOp;
+                }).filter(op => op.op && op.path !== undefined);
                 // Apply JSON Patch operations
                 const updatedItems = (0, fast_json_patch_1.deepClone)(state.items);
-                const patchResult = (0, fast_json_patch_1.applyPatch)(updatedItems, operations, false, false);
+                const patchResult = (0, fast_json_patch_1.applyPatch)(updatedItems, cleanedOperations, false, false);
                 if (patchResult.length === 0 || !patchResult.some(r => r.test === false)) {
                     // All patches applied successfully
                     state.items = updatedItems;

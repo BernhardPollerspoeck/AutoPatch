@@ -43,8 +43,23 @@ export {
 } from './types';
 
 // Utilities
-export { createReactHook } from './utils/react-hook';
 export { PatchUtils } from './utils/patch-utils';
+
+// React hooks (conditionally exported)
+let reactHookExports: any = {};
+try {
+  // Only export React hooks if React is available
+  const reactHooks = require('./utils/react-hook');
+  reactHookExports = {
+    createReactHook: reactHooks.createReactHook,
+    useAutoPatch: reactHooks.useAutoPatch,
+    useAutoPatchCollection: reactHooks.useAutoPatchCollection
+  };
+} catch (error) {
+  // React not available, skip React hook exports
+}
+
+export const { createReactHook, useAutoPatch, useAutoPatchCollection } = reactHookExports;
 
 // Version
 export const VERSION = '1.0.0';
