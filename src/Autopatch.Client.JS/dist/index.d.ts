@@ -23,6 +23,6 @@ export { AutoPatchClient } from './AutoPatchClient';
 export type { AutoPatchConfiguration, AutoPatchEventHandlers, Operation, SubscriptionResult, Trackable, CollectionState, PizzaOrder, DeliveryDriver } from './types';
 export { ConnectionStatus, OrderStatus, DriverStatus } from './types';
 export { PatchUtils } from './utils/patch-utils';
-export declare const createReactHook: any, useAutoPatch: any, useAutoPatchCollection: any;
+export { createReactHook, useAutoPatch, useAutoPatchCollection, type UseAutoPatchConfig, type UseAutoPatchReturn, type UseAutoPatchCollectionConfig, type UseAutoPatchCollectionReturn } from './utils/react-hook';
 export declare const VERSION = "1.0.0";
 //# sourceMappingURL=index.d.ts.map

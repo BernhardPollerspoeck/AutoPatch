@@ -62,6 +62,11 @@ export declare class AutoPatchClient {
      */
     private notifyConnectionChanged;
     /**
+     * Transforms PascalCase property paths to camelCase to match JSON serialization
+     * Example: "/2/Status" -> "/2/status", "/1/CustomerName" -> "/1/customerName"
+     */
+    private transformPathToCamelCase;
+    /**
      * Generates subscription key for type and optional collection key
      */
     private getSubscriptionKey;

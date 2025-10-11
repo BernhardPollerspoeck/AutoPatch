@@ -137,23 +137,28 @@ export function useAutoPatchCollection<T extends Trackable>(
   client: AutoPatchClient | null,
   config: UseAutoPatchCollectionConfig
 ): UseAutoPatchCollectionReturn<T> {
-  const [data, setData] = useState<T[]>([]);
+  const [, forceUpdate] = useState({});
   const [isInitialized, setIsInitialized] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
-  // Update data when client data changes
+  // Get data directly from singleton - no local state copy
+  const data = client ? client.getCollection<T>(config.typeName, config.key) : [];
+
+  // Update initialization status when client data changes
   useEffect(() => {
     if (!client) return;
 
     const interval = setInterval(() => {
-      const currentData = client.getCollection<T>(config.typeName, config.key);
       const initialized = client.isCollectionInitialized(config.typeName, config.key);
+      const currentData = client.getCollection<T>(config.typeName, config.key);
       
-      setData(currentData);
       setIsInitialized(initialized);
       setLastUpdate(new Date());
+      
+      // Force re-render when data changes (since we're reading directly from singleton)
+      forceUpdate({});
     }, 100); // Check for updates every 100ms
 
     return () => clearInterval(interval);
@@ -161,10 +166,13 @@ export function useAutoPatchCollection<T extends Trackable>(
 
   // Auto-subscribe when client connects
   useEffect(() => {
-    if (!client || !config.autoSubscribe) return;
+    if (!client || !config.autoSubscribe || isSubscribed) return;
 
     const subscribe = async () => {
       try {
+        // Add a small delay to ensure connection is fully ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         const result = await client.subscribeToType<T>(
           config.typeName, 
           config.key, 
@@ -172,9 +180,11 @@ export function useAutoPatchCollection<T extends Trackable>(
         );
         
         if (result.success) {
+          console.log(`[useAutoPatchCollection] Successfully subscribed to ${config.typeName}`);
           setIsSubscribed(true);
           setError(null);
         } else {
+          console.error(`[useAutoPatchCollection] Subscription failed for ${config.typeName}:`, result.message);
           setError(new Error(result.message || 'Subscription failed'));
         }
       } catch (err) {
@@ -185,8 +195,20 @@ export function useAutoPatchCollection<T extends Trackable>(
     // Subscribe when client connects
     if (client.getConnectionStatus() === ConnectionStatus.Connected) {
       subscribe();
+      return; // No cleanup needed for immediate subscription
+    } else {
+      // Listen for connection changes
+      const checkConnection = () => {
+        if (client.getConnectionStatus() === ConnectionStatus.Connected && !isSubscribed) {
+          subscribe();
+        }
+      };
+      
+      // Poll for connection status
+      const interval = setInterval(checkConnection, 200);
+      return () => clearInterval(interval);
     }
-  }, [client, config.typeName, config.key, config.authString, config.autoSubscribe]);
+  }, [client, config.typeName, config.key, config.authString, config.autoSubscribe, isSubscribed]);
 
   const subscribe = useCallback(async (): Promise<SubscriptionResult> => {
     if (!client) {
@@ -223,7 +245,6 @@ export function useAutoPatchCollection<T extends Trackable>(
     try {
       await client.unsubscribeFromType(config.typeName, config.key);
       setIsSubscribed(false);
-      setData([]);
       setIsInitialized(false);
       setError(null);
     } catch (err) {

@@ -40,13 +40,16 @@ export class AutoPatchClient {
    */
   private setupConnection(): void {
     this.connection = new HubConnectionBuilder()
-      .withUrl(this.config.endpoint)
+      .withUrl(this.config.endpoint, {
+        timeout: 60000 // 60 seconds timeout
+      })
       .withAutomaticReconnect(this.config.autoReconnect ? [0, 2000, 10000, 30000] : [])
       .configureLogging(LogLevel.Information)
       .build();
 
     // Connection state change handlers
     this.connection.onclose((error) => {
+      console.log('[AutoPatch] Connection closed:', error);
       this.notifyConnectionChanged(ConnectionStatus.Disconnected);
       if (error && this.eventHandlers.onError) {
         this.eventHandlers.onError(new Error(`Connection closed: ${error.message}`));
@@ -54,6 +57,7 @@ export class AutoPatchClient {
     });
 
     this.connection.onreconnecting((error) => {
+      console.log('[AutoPatch] Reconnecting:', error);
       this.notifyConnectionChanged(ConnectionStatus.Reconnecting);
       if (error && this.eventHandlers.onError) {
         this.eventHandlers.onError(new Error(`Reconnecting: ${error.message}`));
@@ -61,6 +65,7 @@ export class AutoPatchClient {
     });
 
     this.connection.onreconnected((connectionId) => {
+      console.log('[AutoPatch] Reconnected with ID:', connectionId);
       this.notifyConnectionChanged(ConnectionStatus.Connected);
       this.resubscribeAll();
     });
@@ -83,19 +88,28 @@ export class AutoPatchClient {
    * Connects to the AutoPatch server
    */
   async connect(): Promise<void> {
+    console.log('[AutoPatch] Starting connection process...');
     if (!this.connection) {
       throw new Error('Connection not initialized');
     }
 
+    console.log('[AutoPatch] Current connection state:', this.connection.state);
     if (this.connection.state === HubConnectionState.Connected) {
+      console.log('[AutoPatch] Already connected, skipping...');
       return;
     }
 
     try {
+      console.log('[AutoPatch] Setting status to Connecting...');
       this.notifyConnectionChanged(ConnectionStatus.Connecting);
+      
+      console.log('[AutoPatch] Calling connection.start()...');
       await this.connection.start();
+      
+      console.log('[AutoPatch] Connection started successfully! State:', this.connection.state);
       this.notifyConnectionChanged(ConnectionStatus.Connected);
     } catch (error) {
+      console.error('[AutoPatch] Connection failed:', error);
       this.notifyConnectionChanged(ConnectionStatus.Disconnected);
       throw new Error(`Failed to connect: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -132,10 +146,18 @@ export class AutoPatchClient {
 
     try {
       const subscriptionKey = this.getSubscriptionKey(typeName, key);
-      const methodName = `AutoPatch/${subscriptionKey}`;
+      const methodName = `autopatch/${subscriptionKey.toLowerCase()}`;
+
+      // Check if already subscribed
+      if (this.subscriptions.has(subscriptionKey)) {
+        console.log(`[AutoPatch] Already subscribed to ${subscriptionKey}`);
+        return { success: true };
+      }
+
+      console.log(`[AutoPatch] Registering handler for method: ${methodName}`);
 
       // Register handler for this specific subscription
-      this.connection.on(methodName, (methodName: string, operations: Operation[], isInitialData: boolean) => {
+      this.connection.on(methodName, (receivedMethodName: string, operations: Operation[], isInitialData: boolean) => {
         this.handleDataUpdate<T>(subscriptionKey, typeName, operations, isInitialData);
       });
 
@@ -183,7 +205,7 @@ export class AutoPatchClient {
     }
 
     const subscriptionKey = this.getSubscriptionKey(typeName, key);
-    const methodName = `AutoPatch/${subscriptionKey}`;
+    const methodName = `autopatch/${subscriptionKey.toLowerCase()}`;
 
     try {
       await this.connection.invoke('UnsubscribeFromType', typeName, key || null);
@@ -249,11 +271,11 @@ export class AutoPatchClient {
 
     try {
       if (operations && operations.length > 0) {
-        // Clean operations by removing non-standard properties and ensuring valid structure
+        // Clean operations and transform PascalCase paths to camelCase
         const cleanedOperations = operations.map(op => {
           const cleanOp: any = {
             op: op.op,
-            path: op.path
+            path: this.transformPathToCamelCase(op.path)
           };
           
           // Add value if it exists (for add, replace, test operations)
@@ -261,44 +283,66 @@ export class AutoPatchClient {
             cleanOp.value = op.value;
           }
           
-          // Add from if it exists (for move, copy operations)
-          if ('from' in op && op.from !== undefined) {
-            cleanOp.from = op.from;
+          // Add from if it exists and is not null (for move, copy operations)
+          if ('from' in op && op.from !== undefined && op.from !== null) {
+            cleanOp.from = this.transformPathToCamelCase(op.from);
           }
           
           return cleanOp;
         }).filter(op => op.op && op.path !== undefined);
 
-        // Apply JSON Patch operations
-        const updatedItems = deepClone(state.items);
-        const patchResult = applyPatch(updatedItems, cleanedOperations as readonly JsonPatchOperation[], false, false);
-        
-        if (patchResult.length === 0 || !patchResult.some(r => r.test === false)) {
-          // All patches applied successfully
-          state.items = updatedItems;
-          state.lastUpdate = new Date();
+
+        // Apply JSON Patch operations directly to the singleton array
+        try {
+          const patchResult = applyPatch(state.items, cleanedOperations as readonly JsonPatchOperation[], true, false);
           
-          if (isInitialData) {
-            state.isInitialized = true;
+          // Check if we got a newDocument in the result
+          if (patchResult.newDocument) {
+            // Replace the array contents with the new document
+            state.items.length = 0; // Clear array
+            state.items.push(...patchResult.newDocument); // Add new items
           }
+          
+          if (patchResult.length === 0 || !patchResult.some(r => r.test === false)) {
+            // All patches applied successfully
+            state.lastUpdate = new Date();
+            
+            if (isInitialData) {
+              state.isInitialized = true;
+            }
 
-          // Notify event handlers
-          if (this.eventHandlers.onDataUpdated) {
-            this.eventHandlers.onDataUpdated(typeName, operations, isInitialData);
-          }
+            // Notify event handlers
+            if (this.eventHandlers.onDataUpdated) {
+              this.eventHandlers.onDataUpdated(typeName, operations, isInitialData);
+            }
 
-          if (this.eventHandlers.onDataReceived) {
-            this.eventHandlers.onDataReceived(typeName, state.items, isInitialData);
-          }
+            if (this.eventHandlers.onDataReceived) {
+              this.eventHandlers.onDataReceived(typeName, state.items, isInitialData);
+            }
 
-          // Apply dispatcher if configured
-          if (this.config.dispatcher) {
-            this.config.dispatcher(() => {
-              // Dispatcher callback - useful for React state updates
-            });
+          } else {
+            console.error(`[AutoPatch] Some patch operations failed:`, patchResult.filter(r => r.test === false));
+            throw new Error('Failed to apply some patch operations');
           }
-        } else {
-          throw new Error('Failed to apply some patch operations');
+        } catch (patchError: any) {
+          console.error(`[AutoPatch] Patch application failed for ${typeName}:`, patchError);
+          console.error(`[AutoPatch] Operations that failed:`, cleanedOperations);
+          console.error(`[AutoPatch] Current array length:`, state.items.length);
+          console.error(`[AutoPatch] Failed operation:`, patchError.operation);
+          
+          // Log the target object to debug property names
+          if (patchError.operation?.path) {
+            const pathParts = patchError.operation.path.split('/');
+            if (pathParts.length >= 2) {
+              const index = parseInt(pathParts[1]);
+              if (!isNaN(index) && state.items[index]) {
+                console.error(`[AutoPatch] Target object at index ${index}:`, state.items[index]);
+                console.error(`[AutoPatch] Object keys:`, Object.keys(state.items[index]));
+              }
+            }
+          }
+          
+          throw patchError;
         }
       }
     } catch (error) {
@@ -336,6 +380,18 @@ export class AutoPatchClient {
     if (this.eventHandlers.onConnectionChanged) {
       this.eventHandlers.onConnectionChanged(status);
     }
+  }
+
+  /**
+   * Transforms PascalCase property paths to camelCase to match JSON serialization
+   * Example: "/2/Status" -> "/2/status", "/1/CustomerName" -> "/1/customerName"
+   */
+  private transformPathToCamelCase(path: string): string {
+    return path.replace(/\/([A-Z][a-zA-Z]*)/g, (match, propertyName) => {
+      // Convert first letter to lowercase
+      const camelCase = propertyName.charAt(0).toLowerCase() + propertyName.slice(1);
+      return `/${camelCase}`;
+    });
   }
 
   /**

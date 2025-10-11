@@ -1,22 +1,19 @@
-"use strict";
 /**
  * Utility functions for working with JSON Patch operations
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.PatchUtils = void 0;
-const fast_json_patch_1 = require("fast-json-patch");
+import { compare, applyPatch, deepClone } from 'fast-json-patch';
 /**
  * Utility class for JSON Patch operations
  */
-class PatchUtils {
+export class PatchUtils {
     /**
      * Applies a set of JSON Patch operations to an array of objects
      */
     static applyOperationsToArray(items, operations) {
-        const result = (0, fast_json_patch_1.deepClone)(items);
+        const result = deepClone(items);
         const errors = [];
         try {
-            const patchResult = (0, fast_json_patch_1.applyPatch)(result, operations, false, false);
+            const patchResult = applyPatch(result, operations, false, false);
             // Check for any failed operations
             patchResult.forEach((opResult, index) => {
                 if (opResult.test === false) {
@@ -34,7 +31,7 @@ class PatchUtils {
      * Compares two arrays and generates JSON Patch operations
      */
     static compareArrays(oldArray, newArray) {
-        return (0, fast_json_patch_1.compare)(oldArray, newArray);
+        return compare(oldArray, newArray);
     }
     /**
      * Finds an item in an array by a key property
@@ -158,5 +155,4 @@ class PatchUtils {
         return this.sortOperations(Array.from(operationMap.values()));
     }
 }
-exports.PatchUtils = PatchUtils;
 //# sourceMappingURL=patch-utils.js.map

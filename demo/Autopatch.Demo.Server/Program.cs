@@ -31,7 +31,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactDemo", policy =>
     {
-        policy.WithOrigins("http://localhost:3000") // React dev server
+        policy.WithOrigins("http://localhost:3000", "http://localhost:5173") // React/Vite dev servers
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
