@@ -6,7 +6,7 @@ namespace Autopatch.Server.Services;
 /// Factory interface for creating tracked collections with specific keys.
 /// </summary>
 /// <typeparam name="TItem">The type of items in the collection.</typeparam>
-public interface ITrackedCollectionFactory<TItem> 
+public interface ITrackedCollectionFactory<TItem>
     where TItem : class, INotifyPropertyChanged
 {
     /// <summary>

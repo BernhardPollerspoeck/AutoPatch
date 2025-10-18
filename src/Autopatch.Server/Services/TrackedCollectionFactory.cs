@@ -33,7 +33,7 @@ public class TrackedCollectionFactory<TItem>(
         var queueLogger = loggerFactory.CreateLogger<BulkFlushQueue<OperationContainer<TItem>>>();
         var trackerLogger = loggerFactory.CreateLogger<ObservableCollectionTracker<TItem>>();
         var queue = new BulkFlushQueue<OperationContainer<TItem>>(autopatchOptions, options, queueLogger);
-        
+
         return new ObservableCollectionTracker<TItem>(queue, options, trackerLogger, hubContext, key);
     }
 }

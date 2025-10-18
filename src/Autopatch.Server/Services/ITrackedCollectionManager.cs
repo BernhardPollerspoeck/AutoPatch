@@ -14,7 +14,7 @@ public interface ITrackedCollectionManager
     /// <typeparam name="TItem">The type of items in the collection.</typeparam>
     /// <param name="key">Optional key to identify a specific collection. If null, uses the default collection.</param>
     /// <returns>The tracked observable collection.</returns>
-    ObservableCollection<TItem> GetOrCreateCollection<TItem>(string? key = null) 
+    ObservableCollection<TItem> GetOrCreateCollection<TItem>(string? key = null)
         where TItem : class, INotifyPropertyChanged;
 
     /// <summary>
@@ -23,7 +23,7 @@ public interface ITrackedCollectionManager
     /// <typeparam name="TItem">The type of items in the collection.</typeparam>
     /// <param name="key">Optional key to identify a specific collection. If null, uses the default collection.</param>
     /// <returns>The tracked observable collection, or null if it doesn't exist.</returns>
-    ObservableCollection<TItem>? GetCollection<TItem>(string? key = null) 
+    ObservableCollection<TItem>? GetCollection<TItem>(string? key = null)
         where TItem : class, INotifyPropertyChanged;
 
     /// <summary>
@@ -32,7 +32,7 @@ public interface ITrackedCollectionManager
     /// <typeparam name="TItem">The type of items in the collection.</typeparam>
     /// <param name="key">Optional key to identify a specific collection. If null, uses the default collection.</param>
     /// <returns>True if the collection was found and removed, false otherwise.</returns>
-    bool RemoveCollection<TItem>(string? key = null) 
+    bool RemoveCollection<TItem>(string? key = null)
         where TItem : class, INotifyPropertyChanged;
 
     /// <summary>

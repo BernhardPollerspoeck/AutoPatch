@@ -5,9 +5,9 @@ using Autopatch.Server.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure AutoPatch with optimized settings for pizza delivery demo
+// Configure AutoPatch with Aspire support (service discovery available if configured)
 builder.Services
-    .AddAutoPatch(cfg =>
+    .AddAutoPatchWithAspire(cfg =>
     {
         cfg.DefaultThrottleInterval = TimeSpan.FromMilliseconds(500); // Balanced for demo
         cfg.MaxBatchSize = 50;
@@ -53,5 +53,6 @@ app.UseAutoPatch();
 
 Console.WriteLine("🍕 Poller's Pizza Palace Demo Server starting...");
 Console.WriteLine("📊 AutoPatch Framework Demo - Live Order & Driver Tracking");
+Console.WriteLine("🔍 Ready for .NET Aspire service discovery (configure as needed)!");
 
 app.Run();

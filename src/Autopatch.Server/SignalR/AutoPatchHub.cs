@@ -40,7 +40,7 @@ public class AutoPatchHub(ITrackedCollectionManager collectionManager, IServiceP
 
         var tracker = collectionManager.GetAllTrackers().FirstOrDefault(t => t.GetSubscriptionKey() == subscriptionKey);
         tracker?.SendFullData(Context.ConnectionId);
-        
+
         return true;
     }
 
@@ -55,25 +55,25 @@ public class AutoPatchHub(ITrackedCollectionManager collectionManager, IServiceP
     {
         // Try to resolve validator using reflection
         var validatorType = typeof(ICollectionSubscriptionValidator<>);
-        
+
         // Find the type in loaded assemblies
         var itemType = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(a => a.GetTypes())
             .FirstOrDefault(t => t.Name == typeName);
-            
+
         if (itemType == null)
             return true; // Type not found, allow subscription (no validation possible)
-            
+
         var genericValidatorType = validatorType.MakeGenericType(itemType);
         var validator = serviceProvider.GetService(genericValidatorType);
-        
+
         if (validator == null)
             return true; // No validator registered, allow subscription
-            
+
         // Validator exists - ALWAYS call it, let it decide if null/empty auth is acceptable
         var method = genericValidatorType.GetMethod("ValidateSubscription");
         var result = method?.Invoke(validator, [authString ?? string.Empty, collectionKey]);
-        
+
         return result is bool boolResult && boolResult;
     }
 
