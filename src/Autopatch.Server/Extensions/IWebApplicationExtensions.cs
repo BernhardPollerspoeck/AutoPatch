@@ -19,7 +19,7 @@ public static class IWebApplicationExtensions
     /// <returns>A <see cref="HubEndpointConventionBuilder"/> that can be used to further customize the endpoint.</returns>
     public static HubEndpointConventionBuilder UseAutoPatch(this WebApplication host)
     {
-        return host.MapHub<AutoPatchHub>("/Autopatch");
+        return host.MapHub<AutoPatchHub>("/autopatch");
     }
 }
 

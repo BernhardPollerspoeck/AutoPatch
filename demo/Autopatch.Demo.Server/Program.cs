@@ -26,6 +26,18 @@ builder.Services
 
 builder.Services.AddSignalR();
 
+// Add CORS support for React demo
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactDemo", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000", "http://localhost:5173") // React/Vite dev servers
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 // Register simulation services
 builder.Services.AddHostedService<OrderGeneratorService>();
 builder.Services.AddHostedService<KitchenProcessorService>();
@@ -33,6 +45,9 @@ builder.Services.AddHostedService<DriverSimulatorService>();
 builder.Services.AddHostedService<DeliveryCompletionService>();
 
 var app = builder.Build();
+
+// Use CORS
+app.UseCors("AllowReactDemo");
 
 app.UseAutoPatch();
 

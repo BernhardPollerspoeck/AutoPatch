@@ -1,0 +1,227 @@
+/* App Layout */
+.app {
+  min-height: 100vh;
+  background: #f5f5f5;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.app-header {
+  background: #2c3e50;
+  color: white;
+  padding: 1rem 2rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.app-main {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.grids-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.grid-section h2 {
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+/* Connection Status */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.connection-status.connected {
+  background: rgba(46, 204, 113, 0.2);
+  color: #27ae60;
+}
+
+.connection-status.connecting {
+  background: rgba(241, 196, 15, 0.2);
+  color: #f39c12;
+}
+
+.connection-status.error {
+  background: rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+}
+
+.status-indicator {
+  font-size: 1.1rem;
+}
+
+/* Grid Container */
+.grid-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.empty-state {
+  padding: 3rem;
+  text-align: center;
+  color: #7f8c8d;
+  font-size: 1.1rem;
+}
+
+/* Data Grid */
+.data-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-grid th {
+  background: #34495e;
+  color: white;
+  padding: 1rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.data-grid td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #ecf0f1;
+  vertical-align: top;
+}
+
+.data-grid tr:hover {
+  background: #f8f9fa;
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Order Status Colors */
+.status-received .status-badge { background: #e8f4fd; color: #3498db; }
+.status-preparing .status-badge { background: #fff3cd; color: #856404; }
+.status-baking .status-badge { background: #ffe6cc; color: #d63384; }
+.status-ready .status-badge { background: #d1ecf1; color: #0c5460; }
+.status-outfordelivery .status-badge { background: #d4edda; color: #155724; }
+.status-delivered .status-badge { background: #e2e3e5; color: #383d41; }
+
+/* Driver Status Colors */
+.status-available .status-badge { background: #d4edda; color: #155724; }
+.status-assigned .status-badge { background: #fff3cd; color: #856404; }
+.status-delivering .status-badge { background: #f8d7da; color: #721c24; }
+.status-returning .status-badge { background: #cce7ff; color: #004085; }
+.status-offline .status-badge { background: #e2e3e5; color: #383d41; }
+
+/* Tags and Lists */
+.items-list, .orders-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.item-tag, .order-tag {
+  background: #e9ecef;
+  color: #495057;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.no-orders {
+  color: #6c757d;
+  font-style: italic;
+  font-size: 0.8rem;
+}
+
+/* Specific Column Styling */
+.order-id, .driver-id {
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.customer-name, .driver-name {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.order-time, .estimated-delivery {
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+
+.location {
+  font-size: 0.85rem;
+  color: #495057;
+}
+
+.speed {
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  color: #6c757d;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .grids-container {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .app-header {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-main {
+    padding: 1rem;
+  }
+  
+  .data-grid {
+    font-size: 0.8rem;
+  }
+  
+  .data-grid th,
+  .data-grid td {
+    padding: 0.5rem;
+  }
+  
+  .app-header h1 {
+    font-size: 1.4rem;
+  }
+}
