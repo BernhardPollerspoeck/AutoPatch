@@ -99,12 +99,16 @@ var tenantOrders = manager.GetOrCreateCollection<Order>($"tenant_{tenantId}");
 await client.SubscribeToTypeAsync<Order>("tenant_123", "auth_token");
 var orders = client.GetTrackedCollection<Order>("tenant_123");
 
-// Validator
+// Validator (async; receives the authenticated ClaimsPrincipal + the legacy auth string)
 public class OrderValidator : ICollectionSubscriptionValidator<Order>
 {
-    public bool ValidateSubscription(string? auth, string key) => auth == "valid_token";
+    public Task<bool> ValidateSubscriptionAsync(ClaimsPrincipal? user, string? auth, string key)
+        => Task.FromResult(auth == "valid_token");
 }
 builder.Services.AddTrackedCollection<Order, OrderValidator>();
+
+// Optional: require an authenticated user on the hub endpoint (opt-in per app)
+app.UseAutoPatch().RequireAuthorization();
 ```
 
 ### Configuration Options

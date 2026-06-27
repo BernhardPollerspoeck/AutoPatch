@@ -16,10 +16,10 @@ jobs:
       with:
         fetch-depth: 0
     
-    - name: Setup .NET 9
+    - name: Setup .NET 10
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '9.0.x'
+        dotnet-version: '10.0.x'
     
     - name: Update version if requested
       if: github.event_name == 'workflow_dispatch' && github.event.inputs.increment_version != 'none'
@@ -87,21 +87,21 @@ jobs:
         echo "Running tests with coverage collection..."
         
         # Core Tests
-        coverlet ./test/Autopatch.Core.Tests/bin/Debug/net9.0/Autopatch.Core.Tests.dll \
+        coverlet ./test/Autopatch.Core.Tests/bin/Debug/net10.0/Autopatch.Core.Tests.dll \
           --target "dotnet" \
           --targetargs "test ./test/Autopatch.Core.Tests/Autopatch.Core.Tests.csproj --no-build" \
           --format "cobertura" \
           --output "./coverage/Autopatch.Core.Tests.coverage.cobertura.xml"
         
         # Server Tests
-        coverlet ./test/Autopatch.Server.Tests/bin/Debug/net9.0/Autopatch.Server.Tests.dll \
+        coverlet ./test/Autopatch.Server.Tests/bin/Debug/net10.0/Autopatch.Server.Tests.dll \
           --target "dotnet" \
           --targetargs "test ./test/Autopatch.Server.Tests/Autopatch.Server.Tests.csproj --no-build" \
           --format "cobertura" \
           --output "./coverage/Autopatch.Server.Tests.coverage.cobertura.xml"
         
         # Client Tests
-        coverlet ./test/Autopatch.Client.Tests/bin/Debug/net9.0/Autopatch.Client.Tests.dll \
+        coverlet ./test/Autopatch.Client.Tests/bin/Debug/net10.0/Autopatch.Client.Tests.dll \
           --target "dotnet" \
           --targetargs "test ./test/Autopatch.Client.Tests/Autopatch.Client.Tests.csproj --no-build" \
           --format "cobertura" \

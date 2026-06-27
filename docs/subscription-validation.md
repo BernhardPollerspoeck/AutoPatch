@@ -4,7 +4,7 @@ This document explains how to use the subscription validation feature in AutoPat
 
 ## Overview
 
-The subscription validation feature allows you to control which clients can subscribe to specific collections based on an authentication string they provide.
+The subscription validation feature allows you to control which clients can subscribe to specific collections. The validator receives both the authenticated `ClaimsPrincipal` of the connection (from the SignalR `Context.User`) and the legacy authentication string the client provides, so you can authenticate via real ASP.NET Core authentication, via the opaque auth string, or both.
 
 ## Server-Side Setup
 
@@ -13,28 +13,36 @@ The subscription validation feature allows you to control which clients can subs
 Implement the `ICollectionSubscriptionValidator<T>` interface:
 
 ```csharp
+using System.Security.Claims;
+
 public class PizzaOrderValidator : ICollectionSubscriptionValidator<PizzaOrder>
 {
-    public bool ValidateSubscription(string? authString, string collectionKey)
+    public Task<bool> ValidateSubscriptionAsync(
+        ClaimsPrincipal? user, string? authString, string collectionKey)
     {
         // IMPORTANT: This method is ALWAYS called if a validator is registered,
         // regardless of whether the client provided an auth string or not.
-        
+
+        // Option A: authenticate against the connection's ClaimsPrincipal
+        // if (user?.Identity?.IsAuthenticated == true) { ... read tenant claim ... }
+
+        // Option B (shown here): authenticate against the opaque auth string
         // Reject if no authentication provided
         if (string.IsNullOrEmpty(authString))
-            return false;
-        
+            return Task.FromResult(false);
+
         // Your validation logic here
-        if (authString == "admin")
-            return true;
-            
-        if (authString == "store1_user" && collectionKey == "store1")
-            return true;
-            
-        return false; // Reject by default
+        var allowed =
+            authString == "admin"
+            || (authString == "store1_user" && collectionKey == "store1");
+
+        return Task.FromResult(allowed); // Reject by default
     }
 }
 ```
+
+> The method is asynchronous, so you can `await` a database lookup, token introspection
+> endpoint, or authorization service inside the validator.
 
 ### 2. Register with Validation
 
@@ -58,6 +66,17 @@ builder.Services
     {
         // Your configuration
     });
+```
+
+### 4. Require Authentication on the Hub (Optional)
+
+The validator always receives `Context.User`, but the AutoPatch hub itself is **not**
+marked `[Authorize]` — this keeps unauthenticated scenarios (and the auth-string-only
+model) working. If you want ASP.NET Core to reject unauthenticated connections before
+they ever reach a validator, opt in per application when mapping the hub:
+
+```csharp
+app.UseAutoPatch().RequireAuthorization();
 ```
 
 ## Client-Side Usage
@@ -96,17 +115,18 @@ bool success = await client.SubscribeToTypeAsync<DeliveryDriver>();
 - **Security First**: If a validator is registered, it is **ALWAYS** called, even when no auth string is provided.
 - **Validator Decides**: The validator itself decides whether null/empty auth strings are acceptable.
 - **Per Collection Type**: Each collection type can have its own validator.
-- **Collection Keys**: The validator receives both the auth string and the collection key, allowing fine-grained access control.
-- **Backward Compatibility**: Existing code without auth strings continues to work, but may be rejected if validators are added.
-- **Return Value**: The subscription method now returns `bool` to indicate success/failure.
+- **Collection Keys**: The validator receives the `ClaimsPrincipal`, the auth string and the collection key, allowing fine-grained access control.
+- **Backward Compatibility**: Existing code without auth strings continues to work, but may be rejected if validators are added. The `authString` parameter is retained so existing AutoPatch consumers keep compiling against the concept; new consumers can authenticate purely via `ClaimsPrincipal`.
+- **Return Value**: The subscription method returns `Task<bool>` so validation can perform asynchronous work (DB / token introspection).
 
 ## Validation Logic
 
 The validator method receives:
+- `user`: The authenticated `ClaimsPrincipal` of the connection (from `Context.User`), or `null` when unauthenticated
 - `authString`: The authentication token/string provided by the client (can be null/empty)
 - `collectionKey`: The specific collection being accessed (e.g., "store1", "general", "tech-talk")
 
-Return `true` to allow the subscription, `false` to reject it.
+Return a `Task<bool>` resolving to `true` to allow the subscription, `false` to reject it.
 
 ## Security Considerations
 

@@ -30,7 +30,7 @@ public class AutoPatchHub(ITrackedCollectionManager collectionManager, IServiceP
     public async Task<bool> SubscribeToType(string typeName, string? key = null, string? authString = null)
     {
         // If a validator exists, always validate (let the validator decide if null/empty auth is acceptable)
-        if (!ValidateSubscription(typeName, key ?? string.Empty, authString))
+        if (!await ValidateSubscriptionAsync(typeName, key ?? string.Empty, authString))
         {
             return false;
         }
@@ -51,30 +51,30 @@ public class AutoPatchHub(ITrackedCollectionManager collectionManager, IServiceP
     /// <param name="collectionKey">The collection key.</param>
     /// <param name="authString">The authentication string to validate (can be null).</param>
     /// <returns>True if validation passes or no validator is registered; false if validation fails.</returns>
-    private bool ValidateSubscription(string typeName, string collectionKey, string? authString)
+    private async Task<bool> ValidateSubscriptionAsync(string typeName, string collectionKey, string? authString)
     {
         // Try to resolve validator using reflection
         var validatorType = typeof(ICollectionSubscriptionValidator<>);
-        
+
         // Find the type in loaded assemblies
         var itemType = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(a => a.GetTypes())
             .FirstOrDefault(t => t.Name == typeName);
-            
+
         if (itemType == null)
             return true; // Type not found, allow subscription (no validation possible)
-            
+
         var genericValidatorType = validatorType.MakeGenericType(itemType);
         var validator = serviceProvider.GetService(genericValidatorType);
-        
+
         if (validator == null)
             return true; // No validator registered, allow subscription
-            
-        // Validator exists - ALWAYS call it, let it decide if null/empty auth is acceptable
-        var method = genericValidatorType.GetMethod("ValidateSubscription");
-        var result = method?.Invoke(validator, [authString ?? string.Empty, collectionKey]);
-        
-        return result is bool boolResult && boolResult;
+
+        // Validator exists - ALWAYS call it, let it decide if null user / null-empty auth is acceptable
+        var method = genericValidatorType.GetMethod("ValidateSubscriptionAsync");
+        var task = (Task<bool>?)method?.Invoke(validator, [Context.User, authString ?? string.Empty, collectionKey]);
+
+        return task is null || await task;
     }
 
     /// <summary>
