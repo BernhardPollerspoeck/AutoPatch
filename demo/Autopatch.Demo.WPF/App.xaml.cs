@@ -10,7 +10,7 @@ using System.Windows;
 namespace Autopatch.Demo.WPF;
 
 /// <summary>
-/// Pizza Palace WPF Demo Application using modern .NET 9 Host Builder pattern.
+/// Pizza Palace WPF Demo Application using modern .NET 10 Host Builder pattern.
 /// Demonstrates AutoPatch Framework with live order tracking and driver visualization.
 /// </summary>
 public partial class App : Application
@@ -59,7 +59,6 @@ public partial class App : Application
             
             cfg.Dispatcher = action => Current.Dispatcher.Invoke(action);
         })
-
             .AddTrackedCollection<PizzaOrder>()
             .AddTrackedCollection<DeliveryDriver>();
 

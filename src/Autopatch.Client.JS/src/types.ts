@@ -7,13 +7,15 @@
  * Configuration options for the AutoPatch client
  */
 export interface AutoPatchConfiguration {
-  /** The endpoint URL for the AutoPatch server (e.g., "http://localhost:5249/Autopatch") */
+  /** The URL of the AutoPatch hub (e.g., "http://localhost:5249/autopatch") */
   endpoint: string;
   /** Optional dispatcher function for handling UI updates (e.g., React state updates) */
   dispatcher?: (callback: () => void) => void;
   /** Optional authentication string for server validation */
   authString?: string;
-  /** Enable automatic reconnection attempts */
+  /** Optional access token (e.g. a JWT) for the hub connection, sent as bearer token */
+  accessTokenFactory?: () => string | Promise<string>;
+  /** Enable automatic reconnection attempts (retries forever, then subscribes to all collections again) */
   autoReconnect?: boolean;
   /** Reconnection delay in milliseconds */
   reconnectDelay?: number;
@@ -74,6 +76,8 @@ export interface CollectionState<T extends Trackable> {
   isInitialized: boolean;
   lastUpdate: Date;
   subscriptionKey: string;
+  /** Sequence number of the last applied batch */
+  sequence: number;
 }
 
 /**

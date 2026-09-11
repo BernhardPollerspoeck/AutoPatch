@@ -1,11 +1,12 @@
 using System.Collections.ObjectModel;
+using Autopatch.Client.Models;
 
 namespace Autopatch.Client.Services;
 
 /// <summary>
 /// Defines the contract for an AutoPatch client that manages real-time data synchronization.
 /// </summary>
-public interface IAutoPatchClient
+public interface IAutoPatchClient : IAsyncDisposable
 {
     /// <summary>
     /// Occurs when the connection state changes.
@@ -16,15 +17,27 @@ public interface IAutoPatchClient
     event EventHandler<bool> OnConnectionChanged;
 
     /// <summary>
-    /// Establishes a connection to the AutoPatch server.
+    /// Occurs when the client had to recover from an error, e.g. a batch that could not be applied.
+    /// </summary>
+    /// <remarks>
+    /// The client requests the full data of the affected collection again, so the event is informational.
+    /// It is raised on the dispatcher, if one is configured.
+    /// </remarks>
+    event EventHandler<AutoPatchErrorEventArgs> OnError;
+
+    /// <summary>
+    /// Establishes a connection to the AutoPatch server. Calling it while already connected has no effect.
     /// </summary>
     /// <param name="cancellationToken">A token to cancel the connection operation.</param>
     /// <returns>A task that represents the asynchronous connection operation.</returns>
+    /// <remarks>
+    /// Once connected, the client reconnects automatically and subscribes to all collections again.
+    /// </remarks>
     /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
     Task ConnectAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Disconnects from the AutoPatch server.
+    /// Disconnects from the AutoPatch server and stops reconnecting.
     /// </summary>
     /// <param name="cancellationToken">A token to cancel the disconnection operation.</param>
     /// <returns>A task that represents the asynchronous disconnection operation.</returns>
@@ -40,6 +53,10 @@ public interface IAutoPatchClient
     /// <param name="authString">Optional authentication string for subscription validation.</param>
     /// <param name="cancellationToken">A token to cancel the subscription operation.</param>
     /// <returns>A task that returns true if subscription was successful, false if rejected by server validation.</returns>
+    /// <remarks>
+    /// Subscribing to a collection that is already subscribed shares the collection; the server still validates the given
+    /// credentials, and a rejected call leaves the existing subscription untouched.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when not connected to the server.</exception>
     /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
     Task<bool> SubscribeToTypeAsync<T>(string? key = null, string? authString = null, CancellationToken cancellationToken = default) where T : class;
@@ -51,6 +68,9 @@ public interface IAutoPatchClient
     /// <param name="key">Optional key to identify a specific collection of this type. If null, uses the default collection.</param>
     /// <param name="cancellationToken">A token to cancel the unsubscription operation.</param>
     /// <returns>A task that represents the asynchronous unsubscription operation.</returns>
+    /// <remarks>
+    /// The server subscription ends when the last subscriber of the collection unsubscribes.
+    /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when not connected to the server.</exception>
     /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled.</exception>
     Task UnsubscribeFromTypeAsync<T>(string? key = null, CancellationToken cancellationToken = default) where T : class;

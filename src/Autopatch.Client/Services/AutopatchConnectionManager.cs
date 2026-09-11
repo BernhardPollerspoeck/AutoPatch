@@ -4,39 +4,48 @@ using Microsoft.Extensions.Logging;
 namespace Autopatch.Client.Services;
 
 /// <summary>
-/// Manages the connection lifecycle for the Autopatch client as a hosted service.
-/// Automatically connects when the service starts and disconnects when the service stops.
-/// Provides automatic reconnection with exponential backoff strategy.
+/// Hosted service that connects the AutoPatch client in the background when the host starts and disconnects it when the host stops.
 /// </summary>
+/// <remarks>
+/// Start-up never waits for the server: the first connection is retried with exponential backoff (up to 30 seconds) until it
+/// succeeds. After that the client reconnects on its own. Register it with <c>AddAutoPatchHostedConnection()</c>; hosts that do
+/// not run hosted services (e.g. Blazor WebAssembly) call <see cref="IAutoPatchClient.ConnectAsync"/> themselves.
+/// </remarks>
 /// <param name="autoPatchClient">The Autopatch client instance to manage connections for.</param>
 /// <param name="logger">Logger for connection management operations.</param>
 public class AutopatchConnectionManager(
-    IAutoPatchClient autoPatchClient, 
-    ILogger<AutopatchConnectionManager> logger) : IHostedService
+    IAutoPatchClient autoPatchClient,
+    ILogger<AutopatchConnectionManager> logger) : IHostedService, IDisposable
 {
-    private readonly CancellationTokenSource _cancellationTokenSource = new();
+    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
+
+    private readonly CancellationTokenSource _stopping = new();
+    private Task? _connecting;
 
     /// <summary>
-    /// Starts the hosted service by establishing a connection to the Autopatch service.
-    /// Configures automatic reconnection monitoring for connection resilience.
+    /// Starts connecting in the background and returns right away.
     /// </summary>
-    /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous start operation.</returns>
-    public async Task StartAsync(CancellationToken cancellationToken)
+    /// <param name="cancellationToken">Not used; the background connection runs until <see cref="StopAsync"/>.</param>
+    /// <returns>A completed task.</returns>
+    public Task StartAsync(CancellationToken cancellationToken)
     {
-        await ConnectWithRetry(cancellationToken);
+        _connecting = ConnectUntilSuccessAsync(_stopping.Token);
+        return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Stops the hosted service by disconnecting from the Autopatch service.
-    /// Cancels any ongoing reconnection attempts and ensures clean shutdown.
+    /// Stops connecting and disconnects from the Autopatch service.
     /// </summary>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous stop operation.</returns>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        _cancellationTokenSource.Cancel();
-        
+        await _stopping.CancelAsync();
+        if (_connecting is not null)
+        {
+            await _connecting;
+        }
+
         try
         {
             await autoPatchClient.DisconnectAsync(cancellationToken);
@@ -45,50 +54,48 @@ public class AutopatchConnectionManager(
         {
             logger.LogWarning(ex, "Error during disconnect");
         }
-        
-        _cancellationTokenSource.Dispose();
     }
 
-    /// <summary>
-    /// Attempts to establish a connection using exponential backoff retry strategy.
-    /// Retries up to 5 times with increasing delays between attempts.
-    /// </summary>
-    /// <param name="cancellationToken">Token to cancel the connection attempts.</param>
-    /// <returns>A task that completes when connected or all retries are exhausted.</returns>
-    /// <exception cref="Exception">Thrown when all connection attempts fail.</exception>
-    private async Task ConnectWithRetry(CancellationToken cancellationToken)
+    private async Task ConnectUntilSuccessAsync(CancellationToken cancellationToken)
     {
-        var retryCount = 0;
-        var maxRetries = 5;
-        var baseDelay = TimeSpan.FromSeconds(1);
-
-        while (retryCount < maxRetries && !cancellationToken.IsCancellationRequested)
+        var delay = TimeSpan.FromSeconds(1);
+        for (var attempt = 1; !cancellationToken.IsCancellationRequested; attempt++)
         {
             try
             {
-                logger.LogInformation("Attempting to connect to AutoPatch server (attempt {Attempt}/{MaxRetries})", 
-                    retryCount + 1, maxRetries);
-                
                 await autoPatchClient.ConnectAsync(cancellationToken);
-                
-                logger.LogInformation("Successfully connected to AutoPatch server");
+                logger.LogInformation("Connected to AutoPatch server");
                 return;
             }
-            catch (Exception ex) when (retryCount < maxRetries - 1)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                retryCount++;
-                var delay = TimeSpan.FromMilliseconds(baseDelay.TotalMilliseconds * Math.Pow(2, retryCount - 1));
-                
-                logger.LogWarning(ex, "Failed to connect to AutoPatch server. Retrying in {Delay}ms (attempt {Attempt}/{MaxRetries})", 
-                    delay.TotalMilliseconds, retryCount, maxRetries);
-                
-                await Task.Delay(delay, cancellationToken);
+                return;
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to connect to AutoPatch server after {MaxRetries} attempts", maxRetries);
-                throw;
+                logger.LogWarning(ex, "Failed to connect to AutoPatch server (attempt {Attempt}); retrying in {Delay}", attempt, delay);
             }
+
+            try
+            {
+                await Task.Delay(delay, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            delay = TimeSpan.FromTicks(Math.Min(delay.Ticks * 2, MaxRetryDelay.Ticks));
         }
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _stopping.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

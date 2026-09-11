@@ -163,7 +163,8 @@ export class PatchUtils {
   }
 
   /**
-   * Sorts operations to ensure adds come after removes for consistency
+   * Sorts operations by type (remove, replace/move/copy, add, test).
+   * Note: this changes the meaning of index-based operations; do not use it on batches received from AutoPatch.
    */
   static sortOperations(operations: Operation[]): Operation[] {
     // Sort by operation type: remove, replace, add
@@ -191,18 +192,27 @@ export class PatchUtils {
   }
 
   /**
-   * Merges multiple operation arrays while removing duplicates
+   * Concatenates operation arrays in order. A 'replace' is dropped only if a later 'replace' of the same path follows
+   * without any operation in between that changes the array (add, remove, move, copy), because only then the later value
+   * wins anyway. The order of the operations is kept, since it defines their meaning.
    */
   static mergeOperations(...operationArrays: Operation[][]): Operation[] {
     const allOperations = operationArrays.flat();
-    const operationMap = new Map<string, Operation>();
+    const superseded = new Set<number>();
+    const lastReplace = new Map<string, number>();
 
-    // Use path + op as key to detect duplicates
-    allOperations.forEach(op => {
-      const key = `${op.op}:${op.path}`;
-      operationMap.set(key, op); // Later operations override earlier ones
+    allOperations.forEach((op, index) => {
+      if (op.op === 'replace') {
+        const previous = lastReplace.get(op.path);
+        if (previous !== undefined) {
+          superseded.add(previous);
+        }
+        lastReplace.set(op.path, index);
+      } else if (op.op !== 'test' && op.op !== '_get') {
+        lastReplace.clear();
+      }
     });
 
-    return this.sortOperations(Array.from(operationMap.values()));
+    return allOperations.filter((_, index) => !superseded.has(index));
   }
 }

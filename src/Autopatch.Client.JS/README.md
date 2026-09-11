@@ -26,7 +26,7 @@ npm install @autopatch/client
 import { AutoPatchClient, ConnectionStatus } from '@autopatch/client';
 
 const client = new AutoPatchClient({
-  endpoint: 'http://localhost:5249/Autopatch'
+  endpoint: 'http://localhost:5249/autopatch'
 }, {
   onConnectionChanged: (status) => {
     console.log('Connection status:', status);
@@ -63,7 +63,7 @@ import { AutoPatchClient, PizzaOrder, useAutoPatch, useAutoPatchCollection } fro
 
 function PizzaTracker() {
   const { client, isConnected, connect } = useAutoPatch({
-    endpoint: 'http://localhost:5249/Autopatch',
+    endpoint: 'http://localhost:5249/autopatch',
     autoConnect: true
   });
 
@@ -99,10 +99,13 @@ new AutoPatchClient(config, eventHandlers?)
 ```
 
 **Config Options:**
-- `endpoint` (string): SignalR hub endpoint URL
-- `authString?` (string): Default authentication string
-- `autoReconnect?` (boolean): Enable automatic reconnection (default: true)
-- `reconnectDelay?` (number): Reconnection delay in milliseconds (default: 3000)
+- `endpoint` (string): URL of the AutoPatch hub, e.g. `http://localhost:5249/autopatch`
+- `authString?` (string): Default authentication string (a string passed to `subscribeToType` takes precedence and is kept for resubscriptions)
+- `accessTokenFactory?` (() => string | Promise<string>): Access token (e.g. JWT) sent as bearer token with the hub connection
+- `autoReconnect?` (boolean): Reconnect automatically, forever, and subscribe to all collections again (default: true)
+
+Batches carry sequence numbers. A batch is applied completely or not at all; if a batch is missing or does not fit, the
+client requests the full data again. Errors are reported to `onError` (or `console.error` if no handler is set).
 - `dispatcher?` (function): UI update dispatcher for threading
 
 **Event Handlers:**

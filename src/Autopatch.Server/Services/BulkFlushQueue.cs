@@ -1,4 +1,4 @@
-using System.ComponentModel;
+using System.Threading.Channels;
 using Autopatch.Server.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -6,9 +6,18 @@ using Microsoft.Extensions.Options;
 namespace Autopatch.Server.Services;
 
 /// <summary>
-/// A thread-safe queue that batches items and flushes them based on configurable criteria.
-/// Items are flushed when the batch size limit is reached, after a timeout interval, or manually.
+/// Collects items into batches and hands the batches, strictly in order, to <see cref="OnFlush"/>.
 /// </summary>
+/// <remarks>
+/// <para>
+/// <see cref="Add"/> only appends to the pending batch and never waits for a flush, so producers are never blocked by a slow
+/// transport. A batch is sealed when the throttle interval since its first item has elapsed, when it reaches the maximum batch
+/// size or when <see cref="Flush"/> is called, depending on the <see cref="FlushMode"/>.
+/// </para>
+/// <para>
+/// Sealed batches are delivered by a single background loop, one after the other, in the order they were sealed.
+/// </para>
+/// </remarks>
 /// <typeparam name="TQueueItem">The type of items stored in the queue.</typeparam>
 /// <param name="options">Configuration options for queue behavior including batch size and throttle interval.</param>
 /// <param name="itemOptions">Options specific to the type of items in the queue, such as maximum batch size.</param>
@@ -20,35 +29,47 @@ public class BulkFlushQueue<TQueueItem>(
     : IDisposable
     where TQueueItem : class
 {
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
+    private readonly Lock _gate = new();
     private readonly List<TQueueItem> _queue = [];
+    private readonly Channel<PendingFlush> _flushes = Channel.CreateUnbounded<PendingFlush>(new UnboundedChannelOptions { SingleReader = true });
     private Timer? _timer;
-    private bool _disposed = false;
+    private bool _timerArmed;
+    private Task? _sender;
+    private bool _disposed;
 
     /// <summary>
-    /// Event that is raised when the queue is flushed. Subscribers receive the list of items being flushed.
+    /// Event that is raised for every sealed batch. Handlers are awaited one after the other; the next batch is not delivered
+    /// before all handlers of the previous one have completed.
     /// </summary>
     public event Func<List<TQueueItem>, Task>? OnFlush;
 
     /// <summary>
-    /// Adds an item to the queue. Optionally inserts at a specific index or forces immediate flush.
+    /// Gets the flush mode that is in effect for this queue.
+    /// </summary>
+    public FlushMode FlushMode => itemOptions.Value.FlushMode ?? options.Value.DefaultFlushMode;
+
+    /// <summary>
+    /// Gets the throttle interval that is in effect for this queue.
+    /// </summary>
+    public TimeSpan ThrottleInterval => itemOptions.Value.ThrottleInterval ?? options.Value.DefaultThrottleInterval;
+
+    /// <summary>
+    /// Appends an item to the pending batch.
     /// </summary>
     /// <param name="item">The item to add to the queue.</param>
     /// <param name="index">Optional zero-based index to insert the item at. If null, item is added to the end.</param>
-    /// <param name="forceFlush">If true, immediately flushes the queue after adding the item.</param>
-    public async Task Add(TQueueItem item, int? index = null, bool forceFlush = false)
+    /// <param name="forceFlush">If true, seals the pending batch right away.</param>
+    /// <returns>
+    /// A completed task, or with <paramref name="forceFlush"/> a task that completes once the batch has been delivered.
+    /// </returns>
+    public Task Add(TQueueItem item, int? index = null, bool forceFlush = false)
     {
-        if (_disposed)
-            return;
-
-        await _semaphore.WaitAsync();
-        try
+        lock (_gate)
         {
-            _timer ??= new(
-                async _ => await TimerCallback(),
-                null,
-                GetThrottleIntervalMilliseconds(),
-                GetThrottleIntervalMilliseconds());
+            if (_disposed)
+            {
+                return Task.CompletedTask;
+            }
 
             if (index.HasValue)
             {
@@ -61,103 +82,142 @@ public class BulkFlushQueue<TQueueItem>(
 
             if (forceFlush)
             {
-                await InternalFlush(FlushMode.Manual);
-                return;
+                return SealLocked(FlushMode.Manual);
             }
 
-            if (_queue.Count >= GetMaxBatchSize())
+            if (FlushMode != FlushMode.Manual && _queue.Count >= GetMaxBatchSize())
             {
-                await InternalFlush(FlushMode.MaxBatchSize);
+                SealLocked(FlushMode.MaxBatchSize);
+            }
+            else if (FlushMode == FlushMode.Timed)
+            {
+                ArmTimerLocked();
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Delivers an item as a batch of its own, after all batches sealed so far and without sealing the pending batch.
+    /// </summary>
+    /// <param name="item">The item to deliver.</param>
+    /// <returns>A task that completes once the item has been delivered.</returns>
+    public Task SendImmediately(TQueueItem item)
+    {
+        lock (_gate)
+        {
+            return _disposed ? Task.CompletedTask : EnqueueLocked([item], FlushMode.Manual);
+        }
+    }
+
+    /// <summary>
+    /// Seals the pending batch.
+    /// </summary>
+    /// <returns>A task that completes once this batch and all batches before it have been delivered.</returns>
+    public Task Flush()
+    {
+        lock (_gate)
+        {
+            return _disposed ? Task.CompletedTask : SealLocked(FlushMode.Manual);
+        }
+    }
+
+    private Task SealLocked(FlushMode flushMode)
+    {
+        List<TQueueItem> items = [.. _queue];
+        _queue.Clear();
+        return EnqueueLocked(items, flushMode);
+    }
+
+    private Task EnqueueLocked(List<TQueueItem> items, FlushMode flushMode)
+    {
+        var flush = new PendingFlush(items, flushMode);
+        _flushes.Writer.TryWrite(flush);
+        _sender ??= Task.Run(SendLoopAsync);
+        return flush.Completion.Task;
+    }
+
+    private void ArmTimerLocked()
+    {
+        if (_timerArmed)
+        {
+            return;
+        }
+        _timer ??= new Timer(OnTimer);
+        _timer.Change(GetThrottleIntervalMilliseconds(), Timeout.Infinite);
+        _timerArmed = true;
+    }
+
+    private void OnTimer(object? state)
+    {
+        lock (_gate)
+        {
+            _timerArmed = false;
+            if (!_disposed && _queue.Count > 0)
+            {
+                SealLocked(FlushMode.Timed);
             }
         }
-        finally
-        {
-            _semaphore.Release();
-        }
     }
 
-    /// <summary>
-    /// Manually flushes all items currently in the queue.
-    /// </summary>
-    public async Task Flush()
+    private async Task SendLoopAsync()
     {
-        if (_disposed)
-            return;
-
-        await _semaphore.WaitAsync();
-        try
+        await foreach (var flush in _flushes.Reader.ReadAllAsync())
         {
-            await InternalFlush(FlushMode.Manual);
-        }
-        finally
-        {
-            _semaphore.Release();
-        }
-    }
-
-    /// <summary>
-    /// Internal method that performs the actual flush operation by invoking the OnFlush event
-    /// and clearing the queue. Resets the timer interval after flushing.
-    /// </summary>
-    /// <param name="flushMode">The mode that triggered this flush operation.</param>
-    private async Task InternalFlush(FlushMode flushMode)
-    {
-        if (_queue.Count == 0)
-            return;
-
-        logger.LogInformation("Flushing BulkFlushQueue with {Count} items (Mode: {Mode})", _queue.Count, flushMode);
-        var itemsToFlush = _queue.ToList();
-
-        try
-        {
-            if (OnFlush != null)
-                await OnFlush.Invoke(itemsToFlush);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error during flush of BulkFlushQueue");
-        }
-
-        _queue.Clear();
-
-        _timer?.Change(
-            GetThrottleIntervalMilliseconds(),
-            GetThrottleIntervalMilliseconds());
-    }
-
-    /// <summary>
-    /// Timer callback method that triggers a timed flush when the throttle interval elapses.
-    /// </summary>
-    private async Task TimerCallback()
-    {
-        if (_disposed)
-            return;
-
-        await _semaphore.WaitAsync();
-        try
-        {
-            await InternalFlush(FlushMode.Timed);
-        }
-        finally
-        {
-            _semaphore.Release();
+            try
+            {
+                if (flush.Items.Count > 0 && OnFlush is { } handlers)
+                {
+                    logger.LogDebug("Flushing BulkFlushQueue with {Count} items (Mode: {Mode})", flush.Items.Count, flush.Mode);
+                    foreach (var handler in handlers.GetInvocationList().Cast<Func<List<TQueueItem>, Task>>())
+                    {
+                        await handler(flush.Items);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error during flush of BulkFlushQueue");
+            }
+            finally
+            {
+                flush.Completion.TrySetResult();
+            }
         }
     }
 
     /// <summary>
-    /// Releases all resources used by the BulkFlushQueue.
+    /// Stops the queue. Pending items are discarded; a batch that is currently being delivered completes normally.
     /// </summary>
     public void Dispose()
     {
-        if (_disposed)
-            return;
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
 
-        _disposed = true;
-        _timer?.Dispose();
-        _timer = null;
-        _semaphore.Dispose();
+            _disposed = true;
+            _queue.Clear();
+            _timer?.Dispose();
+            _timer = null;
+            _flushes.Writer.TryComplete();
+        }
+        GC.SuppressFinalize(this);
     }
 
     private int GetMaxBatchSize() => itemOptions.Value.MaxBatchSize ?? options.Value.MaxBatchSize;
-    private int GetThrottleIntervalMilliseconds() => (int)(itemOptions.Value.ThrottleInterval?.TotalMilliseconds ?? options.Value.DefaultThrottleInterval.TotalMilliseconds);
+
+    private int GetThrottleIntervalMilliseconds() => (int)ThrottleInterval.TotalMilliseconds;
+
+    private sealed class PendingFlush(List<TQueueItem> items, FlushMode mode)
+    {
+        public List<TQueueItem> Items { get; } = items;
+
+        public FlushMode Mode { get; } = mode;
+
+        public TaskCompletionSource Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
 }

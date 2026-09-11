@@ -1,31 +1,47 @@
 using Microsoft.Extensions.Hosting;
+using Autopatch.Client.Services;
 using Autopatch.Demo.WPF.ViewModels;
 
 namespace Autopatch.Demo.WPF;
 
 /// <summary>
-/// Hosted service that automatically initializes AutoPatch subscriptions when the application starts.
-/// Uses modern .NET hosting patterns for clean startup/shutdown lifecycle management.
+/// Background service that connects the AutoPatch client and initializes the subscriptions.
+/// Keeps retrying until the server is reachable, so the app can be started before the server.
+/// After the first connection the client reconnects and resubscribes on its own.
 /// </summary>
-public class AutoPatchConnectionService : IHostedService
+public class AutoPatchConnectionService(IAutoPatchClient autoPatchClient, MainViewModel mainViewModel) : BackgroundService
 {
-    private readonly MainViewModel _mainViewModel;
-
-    public AutoPatchConnectionService(MainViewModel mainViewModel)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _mainViewModel = mainViewModel;
-    }
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await autoPatchClient.ConnectAsync(stoppingToken);
+                break;
+            }
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+            {
+                mainViewModel.ShowConnectionAttemptFailed(ex);
+                await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+            }
+        }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
-    {
         // Initialize all view models with AutoPatch subscriptions
-        await _mainViewModel.OrdersViewModel.InitializeAsync();
-        await _mainViewModel.DriversViewModel.InitializeAsync();
+        await mainViewModel.OrdersViewModel.InitializeAsync();
+        await mainViewModel.DriversViewModel.InitializeAsync();
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
+    public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        // AutoPatch client cleanup will be handled by DI container disposal
-        return Task.CompletedTask;
+        await base.StopAsync(cancellationToken);
+        try
+        {
+            await autoPatchClient.DisconnectAsync(cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            // Never connected.
+        }
     }
 }

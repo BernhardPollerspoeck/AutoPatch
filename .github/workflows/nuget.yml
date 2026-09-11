@@ -1,183 +1,171 @@
 name: Build, Test, and Publish NuGet Packages
 
+# Pushes and pull requests only build and test.
+# Packages are published for a pushed tag 'vX.Y.Z' (must match Directory.Build.props) or a manual run (workflow_dispatch),
+# which can bump the version first and then commits the new version and tags it.
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      increment_version:
+        description: 'Version increment before publishing (none publishes the version in Directory.Build.props)'
+        required: true
+        default: 'none'
+        type: choice
+        options: [ none, patch, minor, major ]
 
+permissions:
+  contents: write
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    
+    timeout-minutes: 20
+
+    env:
+      IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
+
     - name: Setup .NET 10
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '10.0.x'
-    
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: src/Autopatch.Client.JS/package-lock.json
+
     - name: Update version if requested
       if: github.event_name == 'workflow_dispatch' && github.event.inputs.increment_version != 'none'
       shell: pwsh
       run: |
-        # Read current version from Directory.Build.props
         [xml]$buildProps = Get-Content "Directory.Build.props"
         $currentVersion = $buildProps.Project.PropertyGroup.Version
-        
-        # Parse version components
         $major, $minor, $patch = $currentVersion.Split('.')
-        
-        # Increment based on selected option
+
         switch ("${{ github.event.inputs.increment_version }}") {
-          "major" {
-            $major = [int]$major + 1
-            $minor = 0
-            $patch = 1
-          }
-          "minor" {
-            $minor = [int]$minor + 1
-            $patch = 1
-          }
-          "patch" {
-            $patch = [int]$patch + 1
-          }
+          "major" { $major = [int]$major + 1; $minor = 0; $patch = 0 }
+          "minor" { $minor = [int]$minor + 1; $patch = 0 }
+          "patch" { $patch = [int]$patch + 1 }
         }
-        
-        # Create new version
+
         $newVersion = "$major.$minor.$patch"
         Write-Host "Updating version from $currentVersion to $newVersion"
-        
-        # Update version in Directory.Build.props
         $buildProps.Project.PropertyGroup.Version = $newVersion
         $buildProps.Save((Resolve-Path "Directory.Build.props"))
-        
-        # Set environment variable for later steps
-        "PACKAGE_VERSION=$newVersion" | Out-File -FilePath $env:GITHUB_ENV -Append
-    
+
     - name: Get version from Directory.Build.props
-      if: github.event_name != 'workflow_dispatch' || github.event.inputs.increment_version == 'none'
       shell: pwsh
       run: |
         [xml]$buildProps = Get-Content "Directory.Build.props"
         $version = $buildProps.Project.PropertyGroup.Version
         "PACKAGE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
-        Write-Host "Setting package version to: $version"
-    
+        Write-Host "Package version: $version"
+
+    - name: Verify tag matches version
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        if [ "${GITHUB_REF_NAME#v}" != "$PACKAGE_VERSION" ]; then
+          echo "Tag $GITHUB_REF_NAME does not match version $PACKAGE_VERSION in Directory.Build.props"
+          exit 1
+        fi
+
     - name: Restore dependencies
       run: dotnet restore -p:EnableWindowsTargeting=true
-    
+
     - name: Build
-      run: dotnet build --configuration Debug -p:EnableWindowsTargeting=true  # Use Debug for better coverage information
-    
+      run: dotnet build --configuration Debug --no-restore -p:EnableWindowsTargeting=true  # Use Debug for better coverage information
+
     - name: Install coverage tools
       run: |
         dotnet tool install --global coverlet.console
         dotnet tool install --global dotnet-reportgenerator-globaltool
-    
+
     - name: Create coverage directory
       run: mkdir -p coverage
-    
+
     - name: Run tests with coverage
       run: |
-        echo "Running tests with coverage collection..."
-        
-        # Core Tests
-        coverlet ./test/Autopatch.Core.Tests/bin/Debug/net10.0/Autopatch.Core.Tests.dll \
-          --target "dotnet" \
-          --targetargs "test ./test/Autopatch.Core.Tests/Autopatch.Core.Tests.csproj --no-build" \
-          --format "cobertura" \
-          --output "./coverage/Autopatch.Core.Tests.coverage.cobertura.xml"
-        
-        # Server Tests
-        coverlet ./test/Autopatch.Server.Tests/bin/Debug/net10.0/Autopatch.Server.Tests.dll \
-          --target "dotnet" \
-          --targetargs "test ./test/Autopatch.Server.Tests/Autopatch.Server.Tests.csproj --no-build" \
-          --format "cobertura" \
-          --output "./coverage/Autopatch.Server.Tests.coverage.cobertura.xml"
-        
-        # Client Tests
-        coverlet ./test/Autopatch.Client.Tests/bin/Debug/net10.0/Autopatch.Client.Tests.dll \
-          --target "dotnet" \
-          --targetargs "test ./test/Autopatch.Client.Tests/Autopatch.Client.Tests.csproj --no-build" \
-          --format "cobertura" \
-          --output "./coverage/Autopatch.Client.Tests.coverage.cobertura.xml"
-      continue-on-error: true
-    
-    - name: Find coverage files
+        set -e
+        for project in Core Server Client; do
+          echo "Running Autopatch.$project.Tests with coverage..."
+          coverlet ./test/Autopatch.$project.Tests/bin/Debug/net10.0/Autopatch.$project.Tests.dll \
+            --target "dotnet" \
+            --targetargs "test ./test/Autopatch.$project.Tests/Autopatch.$project.Tests.csproj --no-build" \
+            --format "cobertura" \
+            --output "./coverage/Autopatch.$project.Tests.coverage.cobertura.xml"
+        done
+
+    - name: Run JavaScript client tests
+      working-directory: src/Autopatch.Client.JS
       run: |
-        echo "Looking for coverage files..."
-        find ./coverage -type f || echo "No coverage files found in coverage directory"
-    
+        npm ci
+        npm test
+
     - name: Generate code coverage report
+      if: always()
       run: |
         reportgenerator \
           -reports:"./coverage/*.xml" \
           -targetdir:"./coveragereport" \
           -reporttypes:"HtmlInline_AzurePipelines;Cobertura;Badges"
       continue-on-error: true
-    
+
     - name: Upload coverage report artifact
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: CoverageReport
         path: coveragereport
       continue-on-error: true
-    
+
     - name: Create NuGet packages
       run: dotnet pack --configuration Release --output packages -p:EnableWindowsTargeting=true
-    
+
     - name: Upload NuGet packages artifact
       uses: actions/upload-artifact@v4
       with:
         name: NuGetPackages
         path: packages/*.nupkg
-    
-    - name: Debug publishing information
-      run: |
-        echo "Event name: ${{ github.event_name }}"
-        echo "Branch ref: ${{ github.ref }}"
-        
-        # List the packages that would be published
-        echo "Packages to publish:"
-        ls -la packages/*.nupkg
-        
-        # Check if NUGET_API_KEY is set (don't print the actual value)
-        if [ -n "${{ secrets.NUGET_API_KEY }}" ]; then
-          echo "NUGET_API_KEY is set"
-        else
-          echo "NUGET_API_KEY is NOT set"
-        fi
-    
+
     - name: Publish NuGet packages
+      if: env.IS_RELEASE == 'true'
       run: |
-        echo "Publishing library packages to NuGet.org..."
         for package in packages/*.nupkg; do
           package_name=$(basename "$package")
           if [[ "$package_name" =~ ^AutoPatch\.(Core|Client|Server)\. ]]; then
             echo "Publishing library package: $package"
-            dotnet nuget push "$package" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+            # Fails if the version already exists, so an unchanged version is noticed.
+            dotnet nuget push "$package" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
           else
             echo "Skipping non-library package: $package"
           fi
         done
-    
-    - name: Tag version in repository
+
+    - name: Commit version and tag release
+      if: github.event_name == 'workflow_dispatch'
       run: |
         git config --global user.name 'GitHub Actions'
         git config --global user.email 'actions@github.com'
-        
-        # Check if tag already exists
         VERSION="${{ env.PACKAGE_VERSION }}"
-        echo "Checking if tag v$VERSION exists..."
-        if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-          echo "Tag v$VERSION already exists, skipping tag creation"
-        else
-          echo "Creating tag v$VERSION"
-          git tag -a "v$VERSION" -m "Release v$VERSION"
-          git push origin "v$VERSION"
+
+        if ! git diff --quiet -- Directory.Build.props; then
+          git add Directory.Build.props
+          git commit -m "Release v$VERSION"
+          git push origin HEAD:${{ github.ref_name }}
         fi
+
+        git tag -a "v$VERSION" -m "Release v$VERSION"
+        git push origin "v$VERSION"

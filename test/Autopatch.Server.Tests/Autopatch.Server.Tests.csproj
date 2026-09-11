@@ -37,6 +37,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Autopatch.Server\Autopatch.Server.csproj" />
+    <ProjectReference Include="..\..\src\Autopatch.Client\Autopatch.Client.csproj" />
     <ProjectReference Include="..\..\src\Autopatch.Core\Autopatch.Core.csproj" />
   </ItemGroup>
 

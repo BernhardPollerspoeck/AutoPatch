@@ -1,7 +1,6 @@
 using Autopatch.Demo.Server;
 using Autopatch.Demo.Shared;
 using Autopatch.Server.Extensions;
-using Autopatch.Server.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,13 +13,10 @@ builder.Services
     })
     .AddTrackedCollection<PizzaOrder, PizzaOrderValidator>(cfg =>
     {
-        cfg.ClientChangePolicy = ClientChangePolicy.Reject; // Read-only for demo
         cfg.ThrottleInterval = TimeSpan.FromMilliseconds(300);
-        cfg.ExcludedProperties = [nameof(PizzaOrder.EstimatedDelivery)];
     })
     .AddTrackedCollection<DeliveryDriver>(cfg =>
     {
-        cfg.ClientChangePolicy = ClientChangePolicy.Reject; // Read-only for demo
         cfg.ThrottleInterval = TimeSpan.FromMilliseconds(400);
     });
 
@@ -50,8 +46,10 @@ var app = builder.Build();
 app.UseCors("AllowReactDemo");
 
 app.UseAutoPatch();
+app.MapTestEndpoints();
 
 Console.WriteLine("🍕 Poller's Pizza Palace Demo Server starting...");
 Console.WriteLine("📊 AutoPatch Framework Demo - Live Order & Driver Tracking");
+Console.WriteLine("🧪 Test page: http://localhost:5249/test");
 
 app.Run();

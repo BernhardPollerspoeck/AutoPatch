@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Autopatch.Core;
 using Autopatch.Server.Models;
@@ -16,12 +15,12 @@ namespace Autopatch.Server.Services;
 public class TrackedCollectionFactory<TItem>(
     IOptions<ObjectTypeConfiguration<OperationContainer<TItem>>> options,
     ILoggerFactory loggerFactory,
-    IHubContext<AutoPatchHub> hubContext,
-    IOptions<AutopatchOptions> autopatchOptions)
+    AutoPatchHubClients hubs,
+    IOptions<AutopatchOptions> autopatchOptions,
+    IOptions<JsonHubProtocolOptions> jsonHubProtocolOptions)
     : ITrackedCollectionFactory<TItem>
     where TItem : class, INotifyPropertyChanged
 {
-
     /// <summary>
     /// Creates a new tracked collection with the specified key.
     /// </summary>
@@ -29,11 +28,17 @@ public class TrackedCollectionFactory<TItem>(
     /// <returns>A new object tracker for the collection.</returns>
     public ObservableCollectionTracker<TItem> CreateTracker(string? key = null)
     {
-        // Create a new BulkFlushQueue for this specific collection
-        var queueLogger = loggerFactory.CreateLogger<BulkFlushQueue<OperationContainer<TItem>>>();
-        var trackerLogger = loggerFactory.CreateLogger<ObservableCollectionTracker<TItem>>();
-        var queue = new BulkFlushQueue<OperationContainer<TItem>>(autopatchOptions, options, queueLogger);
-        
-        return new ObservableCollectionTracker<TItem>(queue, options, trackerLogger, hubContext, key);
+        var queue = new BulkFlushQueue<OperationContainer<TItem>>(
+            autopatchOptions,
+            options,
+            loggerFactory.CreateLogger<BulkFlushQueue<OperationContainer<TItem>>>());
+
+        return new ObservableCollectionTracker<TItem>(
+            queue,
+            options,
+            loggerFactory.CreateLogger<ObservableCollectionTracker<TItem>>(),
+            hubs,
+            jsonHubProtocolOptions.Value.PayloadSerializerOptions,
+            key);
     }
 }

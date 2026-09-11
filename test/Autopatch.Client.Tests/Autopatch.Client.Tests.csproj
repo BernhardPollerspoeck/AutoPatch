@@ -31,6 +31,8 @@
     </PackageReference>
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
     <PackageReference Include="Moq" Version="4.20.70" />
+    <!-- Builds patch operations in tests and serves as the Newtonsoft baseline in the C9 measurement; the client itself no longer uses it. -->
+    <PackageReference Include="Microsoft.AspNetCore.JsonPatch" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>

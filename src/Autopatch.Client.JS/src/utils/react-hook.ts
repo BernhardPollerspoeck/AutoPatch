@@ -51,6 +51,9 @@ export function useAutoPatch(
       ...eventHandlers,
       onConnectionChanged: (status) => {
         setConnectionStatus(status);
+        if (status === ConnectionStatus.Connected) {
+          setError(null); // Errors before a (re)connect are resolved; the client subscribes again on its own.
+        }
         eventHandlers?.onConnectionChanged?.(status);
       },
       onError: (err) => {
@@ -152,8 +155,7 @@ export function useAutoPatchCollection<T extends Trackable>(
 
     const interval = setInterval(() => {
       const initialized = client.isCollectionInitialized(config.typeName, config.key);
-      const currentData = client.getCollection<T>(config.typeName, config.key);
-      
+
       setIsInitialized(initialized);
       setLastUpdate(new Date());
       
@@ -180,11 +182,9 @@ export function useAutoPatchCollection<T extends Trackable>(
         );
         
         if (result.success) {
-          console.log(`[useAutoPatchCollection] Successfully subscribed to ${config.typeName}`);
           setIsSubscribed(true);
           setError(null);
         } else {
-          console.error(`[useAutoPatchCollection] Subscription failed for ${config.typeName}:`, result.message);
           setError(new Error(result.message || 'Subscription failed'));
         }
       } catch (err) {

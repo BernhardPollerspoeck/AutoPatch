@@ -71,8 +71,9 @@ public class OrderService
 
 ```csharp
 // App setup
-services.AddAutoPatch(cfg => cfg.Endpoint = "http://localhost:5249")
-        .AddTrackedCollection<Order>();
+services.AddAutoPatch(cfg => cfg.Endpoint = "http://localhost:5249/autopatch")
+        .AddTrackedCollection<Order>()
+        .AddAutoPatchHostedConnection(); // optional: connect in the background when the host starts
 
 // Usage
 public class OrderViewModel
@@ -81,10 +82,15 @@ public class OrderViewModel
 
     public async Task InitializeAsync()
     {
+        await _client.ConnectAsync();                   // no-op if already connected
         await _client.SubscribeToTypeAsync<Order>();
         Orders = _client.GetTrackedCollection<Order>(); // Auto-updating collection
     }
 }
+```
+
+The client reconnects automatically and subscribes again after a reconnect. Blazor WebAssembly does not run hosted services, so
+call `ConnectAsync()` yourself there.
 ```
 
 ## 📖 Advanced Features
@@ -109,7 +115,16 @@ builder.Services.AddTrackedCollection<Order, OrderValidator>();
 
 // Optional: require an authenticated user on the hub endpoint (opt-in per app)
 app.UseAutoPatch().RequireAuthorization();
+
+// Client: send a bearer token (JWT) so the hub sees an authenticated Context.User
+services.AddAutoPatch(cfg =>
+{
+    cfg.Endpoint = "https://server/autopatch";
+    cfg.AccessTokenProvider = () => tokenService.GetAccessTokenAsync();
+});
 ```
+
+Only collection types registered with `AddTrackedCollection` can be subscribed; unknown type names are rejected.
 
 ### Configuration Options
 
@@ -117,20 +132,45 @@ app.UseAutoPatch().RequireAuthorization();
 builder.Services.AddTrackedCollection<Order>(cfg =>
 {
     cfg.ThrottleInterval = TimeSpan.FromMilliseconds(100);  // Update frequency
-    cfg.ExcludedProperties = ["InternalData"];              // Skip properties
-    cfg.ClientChangePolicy = ClientChangePolicy.Reject;    // Read-only
+    cfg.ExcludedProperties = ["InternalData"];              // Never sent to clients
+    cfg.FlushMode = FlushMode.Manual;                       // Only send on FlushAsync
 });
+
+// e.g. exactly one batch per simulation tick
+await manager.FlushAsync<Order>(zoneKey);
+```
+
+| `FlushMode` | A batch is sent |
+|---|---|
+| `Timed` (default) | at the latest one throttle interval after the first change, or earlier at `MaxBatchSize` |
+| `MaxBatchSize` | at `MaxBatchSize` or on `FlushAsync` |
+| `Manual` | only on `FlushAsync` |
+
+### Own Hub
+
+To use a single connection for your own hub methods and AutoPatch, derive your hub from `AutoPatchHub` and map it instead of
+calling `UseAutoPatch()`:
+
+```csharp
+public class GameHub(ITrackedCollectionManager manager, IServiceProvider services) : AutoPatchHub(manager, services)
+{
+    public Task Move(int x, int y) => ...;
+}
+
+app.MapHub<GameHub>("/game");
 ```
 
 ## 🏗️ How It Works
 
-**Server**: `ObservableCollection<T>` changes → JsonPatch → SignalR broadcast  
-**Client**: Receive patches → Apply to local `ObservableCollection<T>` → UI updates
+**Server**: `ObservableCollection<T>` changes → JSON Patch operations (insert, remove, replace, move, property changes) → ordered batches with sequence numbers → SignalR broadcast  
+**Client**: Receive batches → apply each batch completely or not at all → UI updates. A missing batch or a batch that does not fit makes the client fetch the full data again.
+
+The wire protocol is described in [spec.md](spec.md).
 
 ## 🌟 Roadmap
 
 - [ ] **Bidirectional Sync** - Client-to-server change propagation
-- [ ] **Change Policies** - Auto/RequireConfirmation/Reject modes  
+- [ ] **Change Policies** - accept, confirm or reject client changes  
 - [ ] **Filtering** - Subscription filters and conditional updates
 - [ ] **Offline Support** - Sync on reconnect
 

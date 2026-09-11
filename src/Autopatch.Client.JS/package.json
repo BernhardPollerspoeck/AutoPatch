@@ -9,6 +9,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "tsc --build --clean",
+    "test": "vitest run",
     "prepare": "npm run build",
     "example:react": "cd examples/react-demo && npm start"
   },
@@ -25,13 +26,13 @@
   "license": "MIT",
   "dependencies": {
     "@microsoft/signalr": "^8.0.0",
-    "fast-json-patch": "^3.1.1",
-    "react-dom": "^19.2.0"
+    "fast-json-patch": "^3.1.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/react": "^18.0.0",
-    "typescript": "^5.9.3"
+    "@types/react": "^19.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
   },
   "peerDependencies": {
     "react": "^19.2.0"
@@ -44,10 +45,14 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/BernhardPollerspoeck/AutoPatch.git",
-    "directory": "clients/js-ts"
+    "directory": "src/Autopatch.Client.JS"
   },
   "bugs": {
     "url": "https://github.com/BernhardPollerspoeck/AutoPatch/issues"
   },
-  "homepage": "https://github.com/BernhardPollerspoeck/AutoPatch#readme"
+  "homepage": "https://github.com/BernhardPollerspoeck/AutoPatch#readme",
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

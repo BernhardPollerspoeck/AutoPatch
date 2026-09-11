@@ -2,8 +2,10 @@ using System.ComponentModel;
 using Autopatch.Core;
 using Autopatch.Server.Models;
 using Autopatch.Server.Services;
+using Autopatch.Server.SignalR;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Autopatch.Server.Extensions;
 /// <summary>
@@ -27,7 +29,9 @@ public static class IServiceCollectionExtensions
         services.Configure(configure);
 
         services.AddHostedService<AutoPatchCollectionTrackerService>();
-        services.AddSingleton<ITrackedCollectionManager, TrackedCollectionManager>();
+        services.TryAddSingleton<ITrackedCollectionManager, TrackedCollectionManager>();
+        services.TryAddSingleton<TrackedCollectionRegistry>();
+        services.TryAddSingleton(sp => new AutoPatchHubClients(sp.GetRequiredService<IHubContext<AutoPatchHub>>(), sp));
 
         return services;
     }
@@ -43,6 +47,7 @@ public static class IServiceCollectionExtensions
     /// <remarks>
     /// This method registers the necessary services for creating tracked collections at runtime.
     /// Use ITrackedCollectionManager.GetOrCreateCollection&lt;TItem&gt;(key) to get collections with specific keys.
+    /// Clients can only subscribe to registered types. Registered types must have unique simple names.
     /// </remarks>
     public static IServiceCollection AddTrackedCollection<TItem>(
             this IServiceCollection services,
@@ -55,7 +60,8 @@ public static class IServiceCollectionExtensions
         }
 
         // Register factory for creating trackers at runtime
-        services.AddSingleton<ITrackedCollectionFactory<TItem>, TrackedCollectionFactory<TItem>>();
+        services.TryAddSingleton<ITrackedCollectionFactory<TItem>, TrackedCollectionFactory<TItem>>();
+        services.AddSingleton(TrackedCollectionRegistration.For<TItem>());
 
         return services;
     }
@@ -85,8 +91,9 @@ public static class IServiceCollectionExtensions
         }
 
         // Register factory for creating trackers at runtime
-        services.AddSingleton<ITrackedCollectionFactory<TItem>, TrackedCollectionFactory<TItem>>();
-        
+        services.TryAddSingleton<ITrackedCollectionFactory<TItem>, TrackedCollectionFactory<TItem>>();
+        services.AddSingleton(TrackedCollectionRegistration.For<TItem>());
+
         // Register the validator
         services.AddScoped<ICollectionSubscriptionValidator<TItem>, TValidator>();
 

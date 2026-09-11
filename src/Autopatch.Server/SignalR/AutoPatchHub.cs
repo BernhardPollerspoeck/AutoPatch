@@ -1,5 +1,7 @@
+using Autopatch.Core;
 using Autopatch.Server.Services;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Autopatch.Server.SignalR;
 
@@ -9,72 +11,61 @@ namespace Autopatch.Server.SignalR;
 /// <remarks>
 /// This hub allows clients to subscribe to specific object types and receive real-time updates when changes occur
 /// in the tracked collections. It leverages SignalR groups to manage subscriptions efficiently.
+/// Applications that want a single connection for their own hub methods and AutoPatch can derive their hub from this class
+/// and map it instead of calling <c>UseAutoPatch()</c>.
 /// </remarks>
 /// <param name="collectionManager">The collection manager that handles dynamic creation and retrieval of tracked collections.</param>
 /// <param name="serviceProvider">Service provider for resolving validators.</param>
 public class AutoPatchHub(ITrackedCollectionManager collectionManager, IServiceProvider serviceProvider) : Hub
 {
-
     /// <summary>
     /// Subscribes the current connection to receive updates for objects of the specified type.
     /// </summary>
     /// <param name="typeName">The name of the type to subscribe to for receiving updates.</param>
     /// <param name="key">Optional key to identify a specific collection of this type. If null, uses the default collection.</param>
     /// <param name="authString">Optional authentication string for subscription validation.</param>
-    /// <returns>A task that returns true if subscription was successful, false if rejected by validation.</returns>
+    /// <returns>A task that returns true if subscription was successful, false if rejected.</returns>
     /// <remarks>
-    /// When a client subscribes to a type, they are added to a SignalR group named "AutoPatch/{typeName}" or "AutoPatch/{typeName}/{key}".
-    /// If a tracker exists for the specified type and key, the full current state of the data is immediately sent to the client.
-    /// If a validator is registered for the type, it will always be called regardless of whether authString is provided.
+    /// <para>
+    /// Only collection types registered with <c>AddTrackedCollection</c> can be subscribed. If a validator is registered for the
+    /// type, it is always called, regardless of whether an auth string is provided.
+    /// </para>
+    /// <para>
+    /// The client is added to the group "AutoPatch/{typeName}" or "AutoPatch/{typeName}/{key}" and receives the full data right
+    /// away - an empty collection if it has not been created yet.
+    /// </para>
     /// </remarks>
     public async Task<bool> SubscribeToType(string typeName, string? key = null, string? authString = null)
     {
-        // If a validator exists, always validate (let the validator decide if null/empty auth is acceptable)
-        if (!await ValidateSubscriptionAsync(typeName, key ?? string.Empty, authString))
+        var registry = serviceProvider.GetRequiredService<TrackedCollectionRegistry>();
+        if (!registry.TryGet(typeName, out var registration))
         {
             return false;
         }
 
-        var subscriptionKey = GetSubscriptionKey(typeName, key);
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"AutoPatch/{subscriptionKey}");
+        if (!await registration.ValidateAsync(serviceProvider, Context.User, authString, key ?? string.Empty))
+        {
+            return false;
+        }
 
-        var tracker = collectionManager.GetAllTrackers().FirstOrDefault(t => t.GetSubscriptionKey() == subscriptionKey);
-        tracker?.SendFullData(Context.ConnectionId);
-        
+        var hubs = serviceProvider.GetRequiredService<AutoPatchHubClients>();
+        hubs.Register(GetType());
+
+        var subscriptionKey = AutoPatchProtocol.GetSubscriptionKey(typeName, key);
+        var target = AutoPatchProtocol.GetMethodName(subscriptionKey);
+        await Groups.AddToGroupAsync(Context.ConnectionId, target);
+
+        if (collectionManager.FindTracker(subscriptionKey) is { } tracker)
+        {
+            tracker.SendFullData(Context.ConnectionId);
+        }
+        else
+        {
+            // Sequence 0: the first batch of a collection created later is detected as a gap, so the client asks for full data.
+            await hubs.SendToConnectionAsync(Context.ConnectionId, target, [target, Array.Empty<PatchOperation>(), true, 0L]);
+        }
+
         return true;
-    }
-
-    /// <summary>
-    /// Validates a subscription request using the registered validator for the type.
-    /// </summary>
-    /// <param name="typeName">The name of the type being subscribed to.</param>
-    /// <param name="collectionKey">The collection key.</param>
-    /// <param name="authString">The authentication string to validate (can be null).</param>
-    /// <returns>True if validation passes or no validator is registered; false if validation fails.</returns>
-    private async Task<bool> ValidateSubscriptionAsync(string typeName, string collectionKey, string? authString)
-    {
-        // Try to resolve validator using reflection
-        var validatorType = typeof(ICollectionSubscriptionValidator<>);
-
-        // Find the type in loaded assemblies
-        var itemType = AppDomain.CurrentDomain.GetAssemblies()
-            .SelectMany(a => a.GetTypes())
-            .FirstOrDefault(t => t.Name == typeName);
-
-        if (itemType == null)
-            return true; // Type not found, allow subscription (no validation possible)
-
-        var genericValidatorType = validatorType.MakeGenericType(itemType);
-        var validator = serviceProvider.GetService(genericValidatorType);
-
-        if (validator == null)
-            return true; // No validator registered, allow subscription
-
-        // Validator exists - ALWAYS call it, let it decide if null user / null-empty auth is acceptable
-        var method = genericValidatorType.GetMethod("ValidateSubscriptionAsync");
-        var task = (Task<bool>?)method?.Invoke(validator, [Context.User, authString ?? string.Empty, collectionKey]);
-
-        return task is null || await task;
     }
 
     /// <summary>
@@ -89,23 +80,7 @@ public class AutoPatchHub(ITrackedCollectionManager collectionManager, IServiceP
     /// </remarks>
     public Task UnsubscribeFromType(string typeName, string? key = null)
     {
-        var subscriptionKey = GetSubscriptionKey(typeName, key);
-        return Groups.RemoveFromGroupAsync(Context.ConnectionId, $"AutoPatch/{subscriptionKey}");
+        var target = AutoPatchProtocol.GetMethodName(AutoPatchProtocol.GetSubscriptionKey(typeName, key));
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, target);
     }
-
-    /// <summary>
-    /// Gets the subscription key for a type and optional key parameter.
-    /// </summary>
-    /// <param name="typeName">The name of the type.</param>
-    /// <param name="key">Optional key to identify a specific collection.</param>
-    /// <returns>The subscription key in format "TypeName" or "TypeName/Key".</returns>
-    private static string GetSubscriptionKey(string typeName, string? key)
-    {
-        return string.IsNullOrEmpty(key) ? typeName : $"{typeName}/{key}";
-    }
-
-    //public Task<ClientChangeResult> SubmitClientChange(string typeName, Operation[] operations)
-    //{
-
-    //}
 }

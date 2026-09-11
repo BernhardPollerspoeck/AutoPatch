@@ -1,3 +1,4 @@
+using Autopatch.Client.Models;
 using Autopatch.Client.Services;
 using Autopatch.Demo.Shared;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -43,7 +44,7 @@ public partial class MainViewModel : ObservableObject
 
         // Setup event handlers
         _autoPatchClient.OnConnectionChanged += OnConnectionChanged;
-        //_autoPatchClient.OnError += OnError;
+        _autoPatchClient.OnError += OnError;
 
         // Start clock timer
         _clockTimer = new Timer(UpdateClock, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
@@ -66,9 +67,18 @@ public partial class MainViewModel : ObservableObject
             : "⚠️ AutoPatch Disconnected - Attempting reconnection";
     }
 
-    private void OnError(Exception ex)
+    /// <summary>
+    /// The client already recovered (it requests the full data again); the message makes resyncs visible while testing.
+    /// </summary>
+    private void OnError(object? sender, AutoPatchErrorEventArgs e)
     {
-        StatusMessage = $"❌ Error: {ex.Message}";
+        StatusMessage = $"⚠️ {DateTime.Now:T} {e.SubscriptionKey ?? "Connection"}: {e.Exception.Message} - resynchronizing";
+    }
+
+    public void ShowConnectionAttemptFailed(Exception ex)
+    {
+        ConnectionStatus = "Disconnected";
         ConnectionStatusColor = "Red";
+        StatusMessage = $"⚠️ {DateTime.Now:T} Server not reachable ({ex.Message}) - retrying";
     }
 }

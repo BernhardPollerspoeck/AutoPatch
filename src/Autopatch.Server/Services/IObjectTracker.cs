@@ -27,7 +27,7 @@ public interface IObjectTracker
     /// Gets the subscription key used for SignalR groups and client subscriptions.
     /// </summary>
     /// <returns>The subscription key in format "TypeName" or "TypeName/Key".</returns>
-    string GetSubscriptionKey() => string.IsNullOrEmpty(Key) ? TypeName : $"{TypeName}/{Key}";
+    string GetSubscriptionKey() => Core.AutoPatchProtocol.GetSubscriptionKey(TypeName, Key);
 
     /// <summary>
     /// Gets the collection that is being tracked for changes.
@@ -53,6 +53,12 @@ public interface IObjectTracker
     /// <param name="connectionId">The unique identifier of the connection to send the data to.</param>
     /// <remarks>This method is typically used for initial synchronization when a new connection is established.</remarks>
     void SendFullData(string connectionId);
+
+    /// <summary>
+    /// Sends all queued changes of the collection now.
+    /// </summary>
+    /// <returns>A task that completes once the changes have been handed to SignalR.</returns>
+    Task FlushAsync();
 }
 
 /// <summary>

@@ -1,14 +1,17 @@
 namespace Autopatch.Client.Models;
 
 /// <summary>
-/// Defines the change tracking modes available for AutoPatch collections.
+/// Defines the change tracking modes for client-side changes, as described in the specification.
 /// </summary>
+/// <remarks>
+/// Client-initiated changes are not supported yet; collections are always synchronized from the server only (<see cref="Disabled"/>).
+/// </remarks>
 public enum ChangeTrackingMode
 {
     /// <summary>
-    /// Automatic change tracking mode.
+    /// Client-side changes are not tracked. This is the default.
     /// </summary>
-    Auto,
+    Disabled,
 
     /// <summary>
     /// Manual commit mode - changes must be explicitly committed.

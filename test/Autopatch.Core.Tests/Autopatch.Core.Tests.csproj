@@ -35,6 +35,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Autopatch.Core\Autopatch.Core.csproj" />
+    <!-- The repository tests compare spec.md with the public API of all packages. -->
+    <ProjectReference Include="..\..\src\Autopatch.Server\Autopatch.Server.csproj" />
+    <ProjectReference Include="..\..\src\Autopatch.Client\Autopatch.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

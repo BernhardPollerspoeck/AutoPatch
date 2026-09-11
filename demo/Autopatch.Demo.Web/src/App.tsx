@@ -36,6 +36,7 @@ function App() {
     error: pizzaOrdersError
   } = useAutoPatchCollection<PizzaOrder>(client, {
     typeName: 'PizzaOrder',
+    authString: 'admin', // PizzaOrderValidator on the demo server rejects subscriptions without auth
     autoSubscribe: true
   })
 

@@ -1,3 +1,5 @@
+using System.Windows;
+using System.Windows.Threading;
 using Autopatch.Demo.Shared;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -11,7 +13,7 @@ public partial class StatisticsViewModel : ObservableObject
 {
     private readonly OrdersViewModel _ordersViewModel;
     private readonly DriversViewModel _driversViewModel;
-    private readonly Timer _updateTimer;
+    private readonly DispatcherTimer _updateTimer;
 
     [ObservableProperty]
     private int _totalOrders;
@@ -33,11 +35,12 @@ public partial class StatisticsViewModel : ObservableObject
         _ordersViewModel = ordersViewModel;
         _driversViewModel = driversViewModel;
 
-        // Update stats every 5 seconds
-        _updateTimer = new Timer(UpdateStatistics, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+        // Update stats every 5 seconds on the UI thread, where AutoPatch applies the changes to the collections.
+        _updateTimer = new DispatcherTimer(TimeSpan.FromSeconds(5), DispatcherPriority.Background, (_, _) => UpdateStatistics(), Application.Current.Dispatcher);
+        UpdateStatistics();
     }
 
-    private void UpdateStatistics(object? state)
+    private void UpdateStatistics()
     {
         // Calculate current statistics
         TotalOrders = _ordersViewModel.Orders.Count;

@@ -1,3 +1,4 @@
+using Autopatch.Core;
 using Autopatch.Server.SignalR;
 using Microsoft.AspNetCore.Builder;
 
@@ -6,20 +7,21 @@ namespace Autopatch.Server.Extensions;
 /// <summary>
 /// Adds the AutoPatch SignalR hub to the specified <see cref="WebApplication"/> instance.
 /// </summary>
-/// <remarks>This method maps the AutoPatch SignalR hub to the endpoint "/Autopatch".  It should be called during
-/// the application's startup configuration to enable the AutoPatch functionality.</remarks>
 public static class IWebApplicationExtensions
 {
     /// <summary>
-    /// Configures the application to use the AutoPatch hub at the specified endpoint.
+    /// Maps the <see cref="AutoPatchHub"/>.
     /// </summary>
-    /// <remarks>This method maps the <see cref="AutoPatchHub"/> to the "/Autopatch" endpoint, enabling
-    /// SignalR communication for the AutoPatch feature.</remarks>
     /// <param name="host">The <see cref="WebApplication"/> instance to configure.</param>
+    /// <param name="pattern">The route of the hub. Defaults to <c>/autopatch</c>.</param>
     /// <returns>A <see cref="HubEndpointConventionBuilder"/> that can be used to further customize the endpoint.</returns>
-    public static HubEndpointConventionBuilder UseAutoPatch(this WebApplication host)
+    /// <remarks>
+    /// Clients use the full hub URL (e.g. <c>https://host/autopatch</c>) as endpoint. The .NET client also accepts the bare host
+    /// URL and appends the default path. To serve AutoPatch through an application hub, derive that hub from
+    /// <see cref="AutoPatchHub"/> and map it instead.
+    /// </remarks>
+    public static HubEndpointConventionBuilder UseAutoPatch(this WebApplication host, string pattern = AutoPatchProtocol.DefaultHubPath)
     {
-        return host.MapHub<AutoPatchHub>("/autopatch");
+        return host.MapHub<AutoPatchHub>(pattern);
     }
 }
-

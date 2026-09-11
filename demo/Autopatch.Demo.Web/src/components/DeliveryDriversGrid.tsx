@@ -44,12 +44,13 @@ const DeliveryDriversGrid: React.FC<DeliveryDriversGridProps> = ({ drivers }) =>
   const getLocationDescription = (driver: DeliveryDriver): string => {
     const { x, status } = driver
     
-    if (status === 'Available' || status === 'Assigned') {
+    // The server sends enums as numbers: 0 Available, 1 Assigned, 2 Delivering, 3 Returning, 4 Offline
+    if (status === 0 || status === 1) {
       return 'At Restaurant'
-    } else if (status === 'Delivering') {
+    } else if (status === 2) {
       const progress = Math.round(((x - 50) / (750 - 50)) * 100)
       return `En Route (${Math.max(0, Math.min(100, progress))}%)`
-    } else if (status === 'Returning') {
+    } else if (status === 3) {
       const progress = Math.round(((750 - x) / (750 - 50)) * 100)
       return `Returning (${Math.max(0, Math.min(100, progress))}%)`
     }
