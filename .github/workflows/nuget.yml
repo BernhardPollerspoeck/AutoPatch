@@ -53,15 +53,13 @@ jobs:
       run: |
         [xml]$buildProps = Get-Content "Directory.Build.props"
         $currentVersion = $buildProps.Project.PropertyGroup.Version
-        $major, $minor, $patch = $currentVersion.Split('.')
+        # Works for 3- and 4-part versions (e.g. 10.1.0 or 10.1.0.0); all parts after the incremented one are reset to 0.
+        [int[]]$parts = $currentVersion.Split('.')
+        $index = @{ major = 0; minor = 1; patch = 2 }["${{ github.event.inputs.increment_version }}"]
+        $parts[$index]++
+        for ($i = $index + 1; $i -lt $parts.Length; $i++) { $parts[$i] = 0 }
 
-        switch ("${{ github.event.inputs.increment_version }}") {
-          "major" { $major = [int]$major + 1; $minor = 0; $patch = 0 }
-          "minor" { $minor = [int]$minor + 1; $patch = 0 }
-          "patch" { $patch = [int]$patch + 1 }
-        }
-
-        $newVersion = "$major.$minor.$patch"
+        $newVersion = $parts -join '.'
         Write-Host "Updating version from $currentVersion to $newVersion"
         $buildProps.Project.PropertyGroup.Version = $newVersion
         $buildProps.Save((Resolve-Path "Directory.Build.props"))
