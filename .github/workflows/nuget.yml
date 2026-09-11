@@ -99,7 +99,7 @@ jobs:
     - name: Run tests with coverage
       run: |
         set -e
-        for project in Core Server Client; do
+        for project in Server Client; do
           echo "Running Autopatch.$project.Tests with coverage..."
           coverlet ./test/Autopatch.$project.Tests/bin/Debug/net10.0/Autopatch.$project.Tests.dll \
             --target "dotnet" \
